@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>双色球分析标注 v1.0.0</title>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #d7dce3;
+      --active: #d92d20;
+      --active-soft: #fff1ef;
+      --blue: #155eef;
+      --blue-soft: #edf4ff;
+      --red-ball: #d77777;
+      --blue-ball: #45a8db;
+      --grid: #d7dce3;
+      font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); }
+    body { overflow: hidden; }
+    button, input { font: inherit; }
+    .app { display: grid; grid-template-rows: auto 1fr; height: 100%; min-width: 1100px; }
+    .toolbar {
+      display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 10px 14px;
+      background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: 0 8px 24px rgba(31,41,55,.1); z-index: 5;
+    }
+    .brand { display: flex; align-items: center; gap: 9px; margin-right: 8px; white-space: nowrap; font-weight: 700; }
+    .brand-mark { display: inline-grid; place-items: center; width: 34px; height: 34px; color: #fff; background: linear-gradient(135deg,#d92d20,#155eef); border-radius: 50%; font-size: 15px; }
+    .version-badge { display: inline-grid; place-items: center; height: 22px; padding: 0 7px; border: 1px solid #cbd5e1; border-radius: 6px; color: #64748b; background: #f8fafc; font-size: 12px; font-weight: 700; }
+    .group { display: flex; align-items: center; gap: 7px; height: 40px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: #fafbfc; }
+    .tool-button, .action-button { display: inline-grid; grid-auto-flow: column; align-items: center; justify-content: center; gap: 6px; min-width: 38px; height: 32px; padding: 0 9px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--text); cursor: pointer; white-space: nowrap; text-decoration: none; }
+    .tool-button:hover, .action-button:hover { border-color: #c5ccd6; background: #fff; }
+    .tool-button.active { border-color: #f5b5ae; color: var(--active); background: var(--active-soft); }
+    .primary-link { border-color: #b8cdfb; color: var(--blue); background: var(--blue-soft); }
+    .icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .swatch-button { width: 28px; height: 28px; border: 2px solid transparent; border-radius: 7px; background: var(--swatch); cursor: pointer; box-shadow: inset 0 0 0 1px rgba(31,41,55,.12); }
+    .swatch-button:hover { border-color: #c5ccd6; }
+    .swatch-button.active { border-color: #374151; box-shadow: inset 0 0 0 2px rgba(255,255,255,.72); }
+
+    .status { min-width: 150px; margin-left: auto; color: var(--muted); font-size: 13px; text-align: right; white-space: nowrap; }
+    .latest-panel { display: flex; align-items: center; gap: 8px; min-width: 420px; height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; white-space: nowrap; }
+    .latest-label { color: var(--muted); font-size: 13px; }
+    .issue { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .balls { display: inline-flex; align-items: center; gap: 4px; }
+    .ball { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: #fff; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .ball.red { background: var(--red-ball); }
+    .ball.blue { background: var(--blue-ball); }
+    .refresh-latest { width: 28px; height: 28px; padding: 0; }
+    .workspace { position: relative; min-height: 0; overflow: auto; background: #eef2f7; }
+    .chart-surface { position: relative; width: max-content; min-width: 100%; min-height: 100%; padding: 14px; cursor: default; display: flex; flex-direction: column; align-items: center; }
+    .chart-title { display: flex; align-items: center; justify-content: center; gap: 12px; height: 38px; width: 100%; max-width: 1546px; padding: 0 8px; background: #fff; border: 1px solid var(--grid); border-bottom: 0; font-weight: 700; }
+    .chart-meta { color: var(--muted); font-size: 13px; font-weight: 400; }
+    .chart-table { position: relative; z-index: 1; border-collapse: collapse; background: #fff; font-size: 12px; color: #1f2937; table-layout: fixed; margin: 0 auto; }
+    .chart-table th, .chart-table td { width: 30px; min-width: 30px; height: 28px; border: 1px solid var(--grid); text-align: center; vertical-align: middle; font-variant-numeric: tabular-nums; }
+    .chart-table th.issue-col, .chart-table td.issue-col { width: 68px; min-width: 68px; position: sticky; left: 14px; z-index: 2; background: #fff; font-weight: 700; }
+    .chart-table thead th { position: sticky; top: 0; z-index: 3; background: #f8fafc; font-weight: 700; }
+    .chart-table thead th.issue-col { z-index: 4; background: #f8fafc; }
+    .sep { width: 8px !important; min-width: 8px !important; background: #cbd5e1 !important; padding: 0; }
+    .miss { color: #eadada; }
+    .chart-table tbody td:nth-child(n+36) .miss, .chart-table tbody td:nth-child(n+36) { color: #d8f2ff; }
+    .hit { position: relative; z-index: 3; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #fff; font-weight: 700; border: 0; box-shadow: none; }
+    .hit.red { background: var(--red-ball); }
+    .hit.blue { background: var(--blue-ball); }
+    .hit.red.hot-red { background: #8f3e3e; }
+    .five-sep td { border-bottom: 2px solid #aeb8c5; }
+    #chartHost { position: relative; }
+    .trend-layer { position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; overflow: visible; }
+    .trend-layer line { stroke: #2997d1; stroke-width: 2; stroke-linecap: round; opacity: .86; }
+    .latest-row td { background: #fffdf2; }
+    .latest-row td.issue-col { color: #b42318; background: #fff7ed; }
+    .pick-row td { background: #fbfcff; }
+    .pick-row td.issue-col { color: #2563eb; background: #eef4ff; }
+    .pick-cell { color: #c5ccd6; cursor: pointer; }
+    .pick-cell:hover { background: #eef4ff; }
+    .pick-cell.pick-selected { color: #fff; }
+    .canvas-layer { position: absolute; inset: 0 auto auto 0; width: 1px; height: 1px; touch-action: none; cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M8 3v10M3 8h10' stroke='%23374151' stroke-width='1'/%3E%3C/svg%3E") 8 8, crosshair; z-index: 4; }
+    .canvas-layer.hand-mode { cursor: default; pointer-events: none; }
+    .canvas-layer.select-mode { cursor: default; }
+    .canvas-layer.hidden-layer { opacity: 0; pointer-events: none; }
+    .text-box { position: absolute; z-index: 6; min-width: 120px; max-width: 360px; padding: 7px 9px; border: 1px solid #9ca3af; border-radius: 6px; outline: 2px solid rgba(21,94,239,.18); color: var(--text); background: rgba(255,255,255,.94); box-shadow: 0 6px 18px rgba(31,41,55,.18); resize: both; overflow: auto; }
+    .hint { position: fixed; right: 16px; bottom: 14px; z-index: 8; max-width: 620px; padding: 9px 11px; color: #374151; background: rgba(255,255,255,.94); border: 1px solid rgba(215,220,227,.9); border-radius: 8px; font-size: 13px; box-shadow: 0 6px 18px rgba(31,41,55,.08); }
+    .hidden-input { display: none; }
+    @media (max-width: 1000px) { body { overflow: auto; } .app { min-width: 760px; } .toolbar { flex-wrap: wrap; align-content: flex-start; } .status { margin-left: 0; text-align: left; } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="toolbar" aria-label="标注工具栏">
+      <div class="brand"><span class="brand-mark">SSQ</span><span>双色球分析标注</span><span class="version-badge" id="versionBadge">v1.0.0</span></div>
+      <div class="group" role="group" aria-label="图表来源">
+        <a class="action-button primary-link" href="https://datachart.500.com/ssq/" target="_blank" rel="noopener" title="打开500彩票网双色球图表"><svg class="icon" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><path d="M15 3h6v6"></path><path d="M10 14L21 3"></path></svg>打开源站</a>
+        <button class="action-button" type="button" id="refreshChartButton" title="重新载入本地图表数据"><svg class="icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2"></path><path d="M3 12A9 9 0 0 1 18.5 5.8"></path><path d="M18 2v4h-4"></path><path d="M6 22v-4h4"></path></svg>刷新图表</button>
+      </div>
+      <div class="group" role="group" aria-label="绘图工具">
+        <button class="tool-button active" type="button" data-tool="hand" title="手型选择"><svg class="icon" viewBox="0 0 24 24"><path d="M18 11.5V10a2 2 0 0 0-4 0V9a2 2 0 0 0-4 0v1"></path><path d="M10 10V5a2 2 0 0 0-4 0v8"></path><path d="M6 13l-1.2-1.2a2 2 0 0 0-2.8 2.8l5.5 5.5A6.5 6.5 0 0 0 12.1 22H14a6 6 0 0 0 6-6v-4.5a2 2 0 0 0-4 0"></path></svg></button>
+        <button class="tool-button" type="button" data-tool="pen" title="自由画线"><svg class="icon" viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3 1 1-4z"></path><path d="M18 13l-7-7"></path><path d="M2 22l7-2"></path></svg></button>
+        <button class="tool-button" type="button" data-tool="line" title="直线"><svg class="icon" viewBox="0 0 24 24"><path d="M5 19L19 5"></path></svg></button>
+        <button class="tool-button" type="button" data-tool="arrow" title="箭头"><svg class="icon" viewBox="0 0 24 24"><path d="M5 19L19 5"></path><path d="M11 5h8v8"></path></svg></button>
+        <button class="tool-button" type="button" data-tool="rect" title="矩形"><svg class="icon" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"></rect></svg></button>
+        <button class="tool-button" type="button" data-tool="ellipse" title="圆圈"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle></svg></button>
+        <button class="tool-button" type="button" data-tool="text" title="文字"><svg class="icon" viewBox="0 0 24 24"><path d="M4 7V4h16v3"></path><path d="M9 20h6"></path><path d="M12 4v16"></path></svg></button>
+      </div>
+      <div class="group" role="group" aria-label="标注颜色">
+        <button class="swatch-button active" type="button" data-color="#79aee8" style="--swatch:#79aee8" title="马卡龙蓝"></button>
+        <button class="swatch-button" type="button" data-color="#8fd5a4" style="--swatch:#8fd5a4" title="马卡龙绿"></button>
+        <button class="swatch-button" type="button" data-color="#f3d36b" style="--swatch:#f3d36b" title="马卡龙黄"></button>
+      </div>
+      <div class="group" role="group" aria-label="操作">
+        <button class="action-button" type="button" id="undoButton" title="撤销"><svg class="icon" viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"></path><path d="M5 10h10a5 5 0 0 1 0 10h-1"></path></svg>撤销</button>
+        <button class="action-button" type="button" id="toggleButton" title="隐藏或显示标注"><svg class="icon" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg><span id="toggleText">隐藏</span></button>
+        <button class="action-button" type="button" id="exportButton" title="导出图表和标注PNG"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="M7 10l5 5 5-5"></path><path d="M12 15V3"></path></svg>导出</button>
+        <button class="action-button" type="button" id="clearButton" title="清空所有标注"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v5"></path><path d="M14 11v5"></path></svg>清空</button>
+      </div>
+      <div class="latest-panel"><span class="latest-label">最新</span><span class="issue" id="latestIssue">加载中</span><span class="balls" id="latestBalls"></span><button class="action-button refresh-latest" type="button" id="refreshLatestButton" title="刷新顶部最新开奖"><svg class="icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2"></path><path d="M3 12A9 9 0 0 1 18.5 5.8"></path><path d="M18 2v4h-4"></path><path d="M6 22v-4h4"></path></svg></button></div>
+      <div class="status" id="statusText">自动保存已开启</div>
+    </section>
+    <section class="workspace" id="workspace">
+      <div class="chart-surface" id="chartSurface">
+        <div class="chart-title">双色球红蓝走势图 <span class="chart-meta" id="chartMeta"></span></div>
+        <div id="chartHost"></div>
+        <canvas class="canvas-layer hand-mode" id="drawCanvas" aria-label="标注绘图层"></canvas>
+      </div>
+      <div class="hint" id="hintText">手型模式可拖动/滚动查看图表；选择画笔、直线、箭头、矩形、圆圈或文字后可在图表上标注。</div>
+    </section>
+  </main>
+  <script src="./latest-ssq.js"></script>
+  <script src="./chart-data.js"></script>
+  <script>
+    (() => {
+      const APP_VERSION = "v1.0.0";
+      const STORAGE_SCHEMA_VERSION = 6;
+      const STORAGE_KEY = "ssq-analysis-annotations-v1";
+      const OLD_KEYS = ["ssq-analysis-annotations-v5", "ssq-analysis-annotations-v4", "ssq-analysis-annotations-v3", "ssq-analysis-annotations-v2"];
+      const MARKER_STYLE = Object.freeze({ width: 3, defaultColor: "#79aee8" });
+      const workspace = document.getElementById("workspace");
+      const chartSurface = document.getElementById("chartSurface");
+      const chartHost = document.getElementById("chartHost");
+      const chartMeta = document.getElementById("chartMeta");
+      const canvas = document.getElementById("drawCanvas");
+      const ctx = canvas.getContext("2d");
+      const swatchButtons = Array.from(document.querySelectorAll(".swatch-button"));
+      const versionBadge = document.getElementById("versionBadge");
+      const statusText = document.getElementById("statusText");
+      const toggleButton = document.getElementById("toggleButton");
+      const toggleText = document.getElementById("toggleText");
+      const clearButton = document.getElementById("clearButton");
+      const undoButton = document.getElementById("undoButton");
+      const exportButton = document.getElementById("exportButton");
+      const refreshChartButton = document.getElementById("refreshChartButton");
+      const latestIssue = document.getElementById("latestIssue");
+      const latestBalls = document.getElementById("latestBalls");
+      const refreshLatestButton = document.getElementById("refreshLatestButton");
+      const toolButtons = Array.from(document.querySelectorAll(".tool-button"));
+      let actions = [];
+      let picks = { 1: { red: [], blue: [] }, 2: { red: [], blue: [] }, 3: { red: [], blue: [] } };
+      let currentTool = "hand";
+      let isDrawing = false;
+      let startPoint = null;
+      let currentPath = null;
+      let previewPoint = null;
+      let resizeTimer = 0;
+      let saveTimer = 0;
+      let annotationsVisible = true;
+      let selectedIndex = -1;
+      let editMode = null;
+      let editStartPoint = null;
+      let editOriginalAction = null;
+      let editOriginalBounds = null;
+      let redMiss = Array(34).fill(0);
+      let blueMiss = Array(17).fill(0);
+      let strokeColor = swatchButtons.find((button) => button.classList.contains("active"))?.dataset.color || MARKER_STYLE.defaultColor;
+      const getStyle = () => ({ color: strokeColor, width: MARKER_STYLE.width });
+      const setStatus = (text) => { statusText.textContent = text; clearTimeout(statusText._timer); statusText._timer = setTimeout(() => { statusText.textContent = "自动保存已开启"; }, 1800); };
+      const ballHtml = (number, color) => `<span class="ball ${color}">${String(number).padStart(2, "0")}</span>`;
+      const buildHotRedMap = (rows) => {
+        const redRows = rows.map((row) => new Set(row.red.map(Number)));
+        const hot = new Set();
+        const markRun = (run) => { if (run.length >= 3) run.forEach(([rowIndex, number]) => hot.add(`${rowIndex}:${number}`)); };
+        redRows.forEach((redSet, rowIndex) => {
+          let run = [];
+          for (let number = 1; number <= 33; number += 1) {
+            if (redSet.has(number)) run.push([rowIndex, number]);
+            else { markRun(run); run = []; }
+          }
+          markRun(run);
+        });
+        for (const step of [0, 1, -1]) {
+          for (let rowIndex = 0; rowIndex < redRows.length; rowIndex += 1) {
+            for (let number = 1; number <= 33; number += 1) {
+              if (!redRows[rowIndex].has(number)) continue;
+              const prevRow = rowIndex - 1;
+              const prevNumber = number - step;
+              if (prevRow >= 0 && prevNumber >= 1 && prevNumber <= 33 && redRows[prevRow].has(prevNumber)) continue;
+              const run = [];
+              let nextRow = rowIndex;
+              let nextNumber = number;
+              while (nextRow < redRows.length && nextNumber >= 1 && nextNumber <= 33 && redRows[nextRow].has(nextNumber)) {
+                run.push([nextRow, nextNumber]);
+                nextRow += 1;
+                nextNumber += step;
+              }
+              markRun(run);
+            }
+          }
+        }
+        return hot;
+      };
+
+      const showLatest = () => {
+        const latest = window.SSQ_LATEST || {};
+        const rowLatest = window.SSQ_CHART_DATA?.rows?.at(-1);
+        const issue = latest.issue || (rowLatest ? `20${rowLatest.issue}` : "暂无数据");
+        const red = latest.red || rowLatest?.red || [];
+        const blue = latest.blue || (rowLatest ? [rowLatest.blue] : []);
+        latestIssue.textContent = `${issue}期`;
+        latestBalls.innerHTML = red.map((n) => ballHtml(n, "red")).join("") + blue.map((n) => ballHtml(n, "blue")).join("");
+      };
+      const drawBlueTrendLines = () => {
+        chartHost.querySelector(".trend-layer")?.remove();
+        const hits = Array.from(chartHost.querySelectorAll(".trend-blue"));
+        if (hits.length < 2) return;
+        const hostRect = chartHost.getBoundingClientRect();
+        const points = hits.map((hit) => {
+          const rect = hit.getBoundingClientRect();
+          return { x: rect.left - hostRect.left + rect.width / 2, y: rect.top - hostRect.top + rect.height / 2 };
+        });
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.classList.add("trend-layer");
+        svg.setAttribute("width", chartHost.scrollWidth);
+        svg.setAttribute("height", chartHost.scrollHeight);
+        svg.setAttribute("viewBox", `0 0 ${chartHost.scrollWidth} ${chartHost.scrollHeight}`);
+        const ballRadius = 12;
+        for (let index = 1; index < points.length; index += 1) {
+          const a = points[index - 1];
+          const b = points[index];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const length = Math.hypot(dx, dy) || 1;
+          const ux = dx / length;
+          const uy = dy / length;
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          line.setAttribute("x1", a.x + ux * ballRadius);
+          line.setAttribute("y1", a.y + uy * ballRadius);
+          line.setAttribute("x2", b.x - ux * ballRadius);
+          line.setAttribute("y2", b.y - uy * ballRadius);
+          svg.appendChild(line);
+        }
+        chartHost.appendChild(svg);
+      };
+
+      const renderChart = () => {
+        const rows = window.SSQ_CHART_DATA?.rows || [];
+        if (!rows.length) { chartHost.innerHTML = '<div style="padding:24px;background:#fff;border:1px solid #d7dce3">未找到本地图表数据，请运行“打开双色球分析.cmd”刷新。</div>'; return; }
+        redMiss = Array(34).fill(0); blueMiss = Array(17).fill(0);
+        const hotRedMap = buildHotRedMap(rows);
+        chartMeta.textContent = `最近 ${rows.length} 期，生成时间：${window.SSQ_CHART_DATA.generatedAt || "未知"}`;
+        let html = '<table class="chart-table"><thead><tr><th class="issue-col">期号</th>';
+        for (let n = 1; n <= 33; n++) html += `<th>${n}</th>`;
+        html += '<th class="sep"></th>';
+        for (let n = 1; n <= 16; n++) html += `<th>${n}</th>`;
+        html += '</tr></thead><tbody>';
+        rows.forEach((row, index) => {
+          const redSet = new Set(row.red.map(Number));
+          const blueNumber = Number(row.blue);
+          const rowClasses = [index === rows.length - 1 ? "latest-row" : "", (index + 1) % 5 === 0 ? "five-sep" : ""].filter(Boolean).join(" ");
+          html += `<tr class="${rowClasses}"><td class="issue-col">${row.issue}</td>`;
+          for (let n = 1; n <= 33; n++) {
+            if (redSet.has(n)) { redMiss[n] = 0; html += `<td><span class="hit red ${hotRedMap.has(`${index}:${n}`) ? 'hot-red' : ''}">${String(n).padStart(2, "0")}</span></td>`; }
+            else { redMiss[n] += 1; html += `<td class="miss">${redMiss[n]}</td>`; }
+          }
+          html += '<td class="sep"></td>';
+          for (let n = 1; n <= 16; n++) {
+            if (blueNumber === n) { blueMiss[n] = 0; html += `<td><span class="hit blue trend-blue">${String(n).padStart(2, "0")}</span></td>`; }
+            else { blueMiss[n] += 1; html += `<td class="miss">${blueMiss[n]}</td>`; }
+          }
+          html += '</tr>';
+        });
+                for (let line = 1; line <= 3; line++) {
+          html += `<tr class="pick-row"><td class="issue-col">预选${line}</td>`;
+          for (let n = 1; n <= 33; n++) {
+            const selected = picks[line].red.includes(n);
+            html += `<td class="pick-cell ${selected ? 'pick-selected' : ''}" data-pick-line="${line}" data-pick-color="red" data-pick-number="${n}">${selected ? `<span class="hit red">${String(n).padStart(2, "0")}</span>` : n}</td>`;
+          }
+          html += '<td class="sep"></td>';
+          for (let n = 1; n <= 16; n++) {
+            const selected = picks[line].blue.includes(n);
+            html += `<td class="pick-cell ${selected ? 'pick-selected' : ''}" data-pick-line="${line}" data-pick-color="blue" data-pick-number="${n}">${selected ? `<span class="hit blue">${String(n).padStart(2, "0")}</span>` : n}</td>`;
+          }
+          html += '</tr>';
+        }
+        html += '</tbody></table>';
+        chartHost.innerHTML = html;
+        showLatest();
+        setTimeout(() => { resizeCanvas(); drawBlueTrendLines(); }, 60);
+      };
+      const getPoint = (event) => { const rect = canvas.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; };
+      const resizeCanvas = () => { const rect = chartSurface.getBoundingClientRect(); const width = Math.max(chartSurface.scrollWidth, rect.width); const height = Math.max(chartSurface.scrollHeight, rect.height); const ratio = window.devicePixelRatio || 1; canvas.style.width = `${width}px`; canvas.style.height = `${height}px`; canvas.width = Math.max(1, Math.floor(width * ratio)); canvas.height = Math.max(1, Math.floor(height * ratio)); ctx.setTransform(ratio, 0, 0, ratio, 0, 0); drawAll(); };
+      const scheduleResize = () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { resizeCanvas(); drawBlueTrendLines(); }, 80); };
+      const cloneAction = (action) => JSON.parse(JSON.stringify(action));
+      const normalizeBounds = (bounds) => ({ x: Math.min(bounds.x, bounds.x + bounds.w), y: Math.min(bounds.y, bounds.y + bounds.h), w: Math.abs(bounds.w), h: Math.abs(bounds.h) });
+      const pointsBounds = (points) => {
+        const xs = points.map((point) => point.x);
+        const ys = points.map((point) => point.y);
+        return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+      };
+      const actionBounds = (action) => {
+        if (!action) return null;
+        if (action.type === "pen") return pointsBounds(action.points || []);
+        if (action.type === "line" || action.type === "arrow" || action.type === "rect" || action.type === "ellipse") return normalizeBounds({ x: action.start.x, y: action.start.y, w: action.end.x - action.start.x, h: action.end.y - action.start.y });
+        if (action.type === "text") {
+          const fontSize = Math.max(14, action.width * 4);
+          const lines = String(action.text || "").split("\n");
+          const maxChars = Math.max(1, ...lines.map((line) => line.length));
+          return { x: action.x, y: action.y, w: Math.max(80, maxChars * fontSize * 0.62), h: Math.max(24, lines.length * Math.max(18, action.width * 5)) };
+        }
+        return null;
+      };
+      const moveAction = (action, dx, dy) => {
+        if (action.type === "pen") action.points.forEach((point) => { point.x += dx; point.y += dy; });
+        if (action.start) { action.start.x += dx; action.start.y += dy; }
+        if (action.end) { action.end.x += dx; action.end.y += dy; }
+        if (action.type === "text") { action.x += dx; action.y += dy; }
+      };
+      const scalePoint = (point, from, to) => ({
+        x: to.x + ((point.x - from.x) / Math.max(1, from.w)) * Math.max(1, to.w),
+        y: to.y + ((point.y - from.y) / Math.max(1, from.h)) * Math.max(1, to.h)
+      });
+      const scaleAction = (action, fromBounds, toBounds) => {
+        const from = normalizeBounds(fromBounds);
+        const to = normalizeBounds(toBounds);
+        if (action.type === "pen") action.points = action.points.map((point) => scalePoint(point, from, to));
+        if (action.start) action.start = scalePoint(action.start, from, to);
+        if (action.end) action.end = scalePoint(action.end, from, to);
+        if (action.type === "text") {
+          const next = scalePoint({ x: action.x, y: action.y }, from, to);
+          action.x = next.x; action.y = next.y;
+          action.width = Math.max(1, action.width * Math.max(to.w / Math.max(1, from.w), to.h / Math.max(1, from.h)));
+        }
+      };
+      const pointInBounds = (point, bounds, pad = 6) => point.x >= bounds.x - pad && point.x <= bounds.x + bounds.w + pad && point.y >= bounds.y - pad && point.y <= bounds.y + bounds.h + pad;
+      const hitActionIndex = (point) => {
+        for (let index = actions.length - 1; index >= 0; index -= 1) {
+          const bounds = actionBounds(actions[index]);
+          if (bounds && pointInBounds(point, bounds, 8)) return index;
+        }
+        return -1;
+      };
+      const selectionHandle = (point, bounds) => {
+        const size = 8;
+        const handles = {
+          nw: { x: bounds.x, y: bounds.y },
+          ne: { x: bounds.x + bounds.w, y: bounds.y },
+          sw: { x: bounds.x, y: bounds.y + bounds.h },
+          se: { x: bounds.x + bounds.w, y: bounds.y + bounds.h }
+        };
+        for (const [name, handle] of Object.entries(handles)) {
+          if (Math.abs(point.x - handle.x) <= size && Math.abs(point.y - handle.y) <= size) return name;
+        }
+        return null;
+      };
+      const boundsFromHandle = (bounds, handle, point) => {
+        const next = { ...bounds };
+        if (handle.includes("n")) { next.h = bounds.y + bounds.h - point.y; next.y = point.y; }
+        if (handle.includes("s")) next.h = point.y - bounds.y;
+        if (handle.includes("w")) { next.w = bounds.x + bounds.w - point.x; next.x = point.x; }
+        if (handle.includes("e")) next.w = point.x - bounds.x;
+        return normalizeBounds(next);
+      };
+      const drawSelection = () => {
+        const action = actions[selectedIndex];
+        const bounds = actionBounds(action);
+        if (!bounds) return;
+        ctx.save();
+        ctx.setLineDash([6, 4]);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = "#155eef";
+        ctx.strokeRect(bounds.x, bounds.y, Math.max(1, bounds.w), Math.max(1, bounds.h));
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "#155eef";
+        [[bounds.x, bounds.y], [bounds.x + bounds.w, bounds.y], [bounds.x, bounds.y + bounds.h], [bounds.x + bounds.w, bounds.y + bounds.h]].forEach(([x, y]) => {
+          ctx.beginPath(); ctx.rect(x - 4, y - 4, 8, 8); ctx.fill(); ctx.stroke();
+        });
+        ctx.restore();
+      };
+      const drawLine = (context, start, end) => { context.beginPath(); context.moveTo(start.x, start.y); context.lineTo(end.x, end.y); context.stroke(); };
+      const drawArrowHead = (context, start, end, width) => { const angle = Math.atan2(end.y - start.y, end.x - start.x); const size = Math.max(12, width * 4); context.beginPath(); context.moveTo(end.x, end.y); context.lineTo(end.x - size * Math.cos(angle - Math.PI / 6), end.y - size * Math.sin(angle - Math.PI / 6)); context.lineTo(end.x - size * Math.cos(angle + Math.PI / 6), end.y - size * Math.sin(angle + Math.PI / 6)); context.closePath(); context.fill(); };
+      const rectFromPoints = (start, end) => ({ x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), w: Math.abs(end.x - start.x), h: Math.abs(end.y - start.y) });
+      const drawAction = (action, context = ctx) => {
+        context.save(); context.lineWidth = action.width; context.strokeStyle = action.color; context.fillStyle = action.color; context.lineCap = "round"; context.lineJoin = "round";
+        if (action.type === "pen") { const points = action.points || []; if (points.length === 1) { context.beginPath(); context.arc(points[0].x, points[0].y, action.width / 2, 0, Math.PI * 2); context.fill(); } else if (points.length > 1) { context.beginPath(); context.moveTo(points[0].x, points[0].y); for (let i = 1; i < points.length; i++) context.lineTo(points[i].x, points[i].y); context.stroke(); } }
+        if (action.type === "line" || action.type === "arrow") { drawLine(context, action.start, action.end); if (action.type === "arrow") drawArrowHead(context, action.start, action.end, action.width); }
+        if (action.type === "rect") { const rect = rectFromPoints(action.start, action.end); context.strokeRect(rect.x, rect.y, rect.w, rect.h); }
+        if (action.type === "ellipse") { const rect = rectFromPoints(action.start, action.end); context.beginPath(); context.ellipse(rect.x + rect.w / 2, rect.y + rect.h / 2, Math.abs(rect.w / 2), Math.abs(rect.h / 2), 0, 0, Math.PI * 2); context.stroke(); }
+        if (action.type === "text") { context.font = `${Math.max(14, action.width * 4)}px "Microsoft YaHei", Arial, sans-serif`; context.textBaseline = "top"; String(action.text || "").split("\n").forEach((line, i) => context.fillText(line, action.x, action.y + i * Math.max(18, action.width * 5))); }
+        context.restore();
+      };
+      const drawPreview = () => { if (!isDrawing || !startPoint || !previewPoint || currentTool === "pen" || currentTool === "text") return; drawAction({ type: currentTool, start: startPoint, end: previewPoint, ...getStyle() }); };
+      const drawAll = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); actions.forEach((action) => drawAction(action)); if (currentPath) drawAction(currentPath); drawPreview(); drawSelection(); };
+      const save = () => { localStorage.setItem(STORAGE_KEY, JSON.stringify({ appVersion: APP_VERSION, version: STORAGE_SCHEMA_VERSION, savedAt: new Date().toISOString(), actions, picks })); setStatus("已自动保存"); };
+      const scheduleSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(save, 180); };
+      const load = () => { try { let raw = localStorage.getItem(STORAGE_KEY); for (const key of OLD_KEYS) if (!raw) raw = localStorage.getItem(key); if (!raw) return; const payload = JSON.parse(raw); if (Array.isArray(payload.actions)) actions = payload.actions; if (payload.picks) picks = { ...picks, ...payload.picks }; } catch (error) { console.warn(error); actions = []; } };
+      const undoLastAction = () => { actions.pop(); drawAll(); scheduleSave(); setStatus("已撤销"); };
+      const commitAction = (action) => { actions.push(action); currentPath = null; previewPoint = null; isDrawing = false; drawAll(); scheduleSave(); };
+      const beginText = (point) => { const box = document.createElement("textarea"); const style = getStyle(); let finished = false; box.className = "text-box"; box.placeholder = "输入标注文字"; box.style.left = `${point.x}px`; box.style.top = `${point.y}px`; box.style.color = style.color; box.style.fontSize = `${Math.max(14, style.width * 4)}px`; chartSurface.appendChild(box); box.focus(); const finish = () => { if (finished) return; finished = true; const text = box.value.trim(); box.remove(); if (text) commitAction({ type: "text", x: point.x, y: point.y, text, ...style }); }; box.addEventListener("keydown", (event) => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); finish(); } if (event.key === "Escape") { event.preventDefault(); finished = true; box.remove(); } }); box.addEventListener("blur", finish, { once: true }); };
+      const onPointerDown = (event) => {
+        const pickCell = elementBelowCanvas(event)?.closest?.("[data-pick-line]");
+        if (pickCell) { togglePickCell(pickCell); return; }
+        if (!annotationsVisible || currentTool === "hand") return;
+        canvas.setPointerCapture(event.pointerId);
+        const point = getPoint(event);
+        if (currentTool === "select") {
+          const selectedBounds = actionBounds(actions[selectedIndex]);
+          const handle = selectedBounds ? selectionHandle(point, selectedBounds) : null;
+          if (handle) {
+            editMode = `resize:${handle}`;
+            editStartPoint = point;
+            editOriginalAction = cloneAction(actions[selectedIndex]);
+            editOriginalBounds = selectedBounds;
+            return;
+          }
+          const hitIndex = hitActionIndex(point);
+          selectedIndex = hitIndex;
+          if (hitIndex >= 0) {
+            editMode = "move";
+            editStartPoint = point;
+            editOriginalAction = cloneAction(actions[hitIndex]);
+            editOriginalBounds = actionBounds(actions[hitIndex]);
+          } else {
+            editMode = null;
+          }
+          drawAll();
+          return;
+        }
+        selectedIndex = -1;
+        if (currentTool === "text") { beginText(point); return; }
+        isDrawing = true;
+        startPoint = point;
+        previewPoint = point;
+        if (currentTool === "pen") currentPath = { type: "pen", points: [point], ...getStyle() };
+        drawAll();
+      };
+      const onPointerMove = (event) => {
+        const point = getPoint(event);
+        if (currentTool === "select" && editMode && selectedIndex >= 0) {
+          actions[selectedIndex] = cloneAction(editOriginalAction);
+          if (editMode === "move") moveAction(actions[selectedIndex], point.x - editStartPoint.x, point.y - editStartPoint.y);
+          if (editMode.startsWith("resize:")) scaleAction(actions[selectedIndex], editOriginalBounds, boundsFromHandle(editOriginalBounds, editMode.split(":")[1], point));
+          drawAll();
+          return;
+        }
+        if (!isDrawing) return;
+        previewPoint = point;
+        if (currentTool === "pen" && currentPath) currentPath.points.push(point);
+        drawAll();
+      };
+      const onPointerUp = (event) => {
+        if (currentTool === "select" && editMode) {
+          editMode = null;
+          editStartPoint = null;
+          editOriginalAction = null;
+          editOriginalBounds = null;
+          scheduleSave();
+          return;
+        }
+        if (!isDrawing) return;
+        const point = getPoint(event);
+        if (currentTool === "pen" && currentPath) { commitAction(currentPath); return; }
+        const dx = Math.abs(point.x - startPoint.x), dy = Math.abs(point.y - startPoint.y);
+        if (dx < 3 && dy < 3) { currentPath = null; previewPoint = null; isDrawing = false; drawAll(); return; }
+        commitAction({ type: currentTool, start: startPoint, end: point, ...getStyle() });
+      };
+      const setPickCellDisplay = (cell, selected) => {
+        const number = Number(cell.dataset.pickNumber);
+        const color = cell.dataset.pickColor;
+        cell.classList.toggle("pick-selected", selected);
+        cell.innerHTML = selected ? `<span class="hit ${color}">${String(number).padStart(2, "0")}</span>` : number;
+      };
+      const togglePickCell = (cell) => {
+        const line = Number(cell.dataset.pickLine);
+        const color = cell.dataset.pickColor;
+        const number = Number(cell.dataset.pickNumber);
+        const list = picks[line][color];
+        const index = list.indexOf(number);
+        const selected = index < 0;
+        if (selected) list.push(number);
+        else list.splice(index, 1);
+        list.sort((a, b) => a - b);
+        setPickCellDisplay(cell, selected);
+        scheduleSave();
+        setStatus(`预选${line}已更新`);
+      };
+      const elementBelowCanvas = (event) => {
+        const previous = canvas.style.pointerEvents;
+        canvas.style.pointerEvents = "none";
+        const element = document.elementFromPoint(event.clientX, event.clientY);
+        canvas.style.pointerEvents = previous;
+        return element;
+      };
+      const selectTool = (button) => {
+        currentTool = button.dataset.tool;
+        selectedIndex = -1;
+        editMode = null;
+        canvas.classList.toggle("hand-mode", currentTool === "hand");
+        canvas.classList.remove("select-mode");
+        toolButtons.forEach((item) => item.classList.toggle("active", item === button));
+        setStatus(`当前工具：${button.title}`);
+      };
+      const selectAnnotation = (event) => {
+        if (!annotationsVisible) return;
+        const point = getPoint(event);
+        const hitIndex = hitActionIndex(point);
+        if (hitIndex < 0) return;
+        selectedIndex = hitIndex;
+        currentTool = "select";
+        canvas.classList.remove("hand-mode");
+        canvas.classList.add("select-mode");
+        toolButtons.forEach((item) => item.classList.remove("active"));
+        drawAll();
+        setStatus("已选中标注，可拖动移动或拖四角缩放");
+      };
+      const handleShortcut = (event) => {
+        const isEditable = ["INPUT", "TEXTAREA"].includes(event.target.tagName);
+        if (!isEditable && event.key === "Delete" && selectedIndex >= 0) {
+          event.preventDefault();
+          actions.splice(selectedIndex, 1);
+          selectedIndex = -1;
+          editMode = null;
+          drawAll();
+          scheduleSave();
+          setStatus("已删除选中标注");
+          return;
+        }
+        if (!(event.ctrlKey || event.metaKey)) return;
+        const key = event.key.toLowerCase();
+        if (key === "z") { event.preventDefault(); undoLastAction(); }
+        if (key === "s") { event.preventDefault(); save(); }
+      };
+      const bindEvents = () => {
+        chartHost.addEventListener("click", (event) => {
+          const cell = event.target.closest("[data-pick-line]");
+          if (cell) togglePickCell(cell);
+        });
+        toolButtons.forEach((button) => button.addEventListener("click", () => selectTool(button)));
+        swatchButtons.forEach((button) => button.addEventListener("click", () => {
+          strokeColor = button.dataset.color;
+          swatchButtons.forEach((item) => item.classList.toggle("active", item === button));
+          setStatus(`标注颜色：${button.title}`);
+        }));
+        undoButton.addEventListener("click", undoLastAction);
+        clearButton.addEventListener("click", () => {
+          if (!actions.length) return setStatus("没有可清空的标注");
+          if (!confirm("确定清空所有标注吗？")) return;
+          actions = [];
+          drawAll();
+          scheduleSave();
+          setStatus("已清空");
+        });
+        toggleButton.addEventListener("click", () => {
+          annotationsVisible = !annotationsVisible;
+          canvas.classList.toggle("hidden-layer", !annotationsVisible);
+          toggleText.textContent = annotationsVisible ? "隐藏" : "显示";
+          setStatus(annotationsVisible ? "标注层已显示" : "标注层已隐藏");
+        });
+        exportButton.addEventListener("click", () => {
+          const link = document.createElement("a");
+          link.download = `ssq-analysis-${new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")}.png`;
+          link.href = canvas.toDataURL("image/png");
+          link.click();
+          setStatus("已导出标注PNG");
+        });
+        refreshLatestButton.addEventListener("click", () => { showLatest(); setStatus("已显示最新开奖号"); });
+        refreshChartButton.addEventListener("click", () => { location.reload(); });
+        document.addEventListener("keydown", handleShortcut);
+        canvas.addEventListener("dblclick", selectAnnotation);
+        canvas.addEventListener("pointerdown", onPointerDown);
+        canvas.addEventListener("pointermove", onPointerMove);
+        canvas.addEventListener("pointerup", onPointerUp);
+        canvas.addEventListener("pointercancel", onPointerUp);
+        window.addEventListener("resize", scheduleResize);
+      };
+      const init = () => {
+        versionBadge.textContent = APP_VERSION;
+        bindEvents();
+        load();
+        renderChart();
+        resizeCanvas();
+        setStatus(actions.length ? "已恢复上次标注" : "自动保存已开启");
+      };
+      init();
+    })();
+  </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
