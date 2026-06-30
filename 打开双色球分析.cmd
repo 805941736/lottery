@@ -1,5 +1,6 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $api='https://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice?name=ssq^&issueCount=50'; $r=Invoke-WebRequest -Uri $api -UseBasicParsing -TimeoutSec 30 -Headers @{Referer='https://www.cwl.gov.cn/'}; $json=$r.Content | ConvertFrom-Json; $rows=@(); foreach($item in ($json.result | Sort-Object {[int]$_.code})){ $rows += [ordered]@{ issue=$item.code.Substring(2); red=(($item.red -split ',') | ForEach-Object {[int]$_}); blue=[int]$item.blue } }; $payload=[ordered]@{generatedAt=(Get-Date).ToString('yyyy-MM-dd HH:mm:ss'); source='中国福彩网'; rows=$rows}; 'window.SSQ_CHART_DATA = ' + ($payload | ConvertTo-Json -Depth 6 -Compress) + ';' | Set-Content -LiteralPath '.\chart-data.js' -Encoding UTF8; $latest=$json.result[0]; $obj=[ordered]@{ issue=$latest.code; date=$latest.date; red=($latest.red -split ','); blue=@($latest.blue); source='中国福彩网'; updatedAt=(Get-Date).ToString('yyyy-MM-dd HH:mm:ss') }; 'window.SSQ_LATEST = ' + ($obj | ConvertTo-Json -Compress) + ';' | Set-Content -LiteralPath '.\latest-ssq.js' -Encoding UTF8"
-start "" "%~dp0ssq-analysis.html"
+set "PORT=8737"
+start "ssq-local-server" /min powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0ssq-local-server.ps1" -Port %PORT%
+start "" "http://127.0.0.1:%PORT%/ssq-analysis.html"

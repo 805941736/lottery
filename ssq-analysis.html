@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>双色球分析标注 v1.1.0</title>
+  <title>双色球分析标注 v1.2.0</title>
   <style>
     :root {
       --bg: #f5f6f8;
@@ -91,7 +91,7 @@
 <body>
   <main class="app">
     <section class="toolbar" aria-label="标注工具栏">
-      <div class="brand"><span class="brand-mark">SSQ</span><span>双色球分析标注</span><span class="version-badge" id="versionBadge">v1.1.0</span></div>
+      <div class="brand"><span class="brand-mark">SSQ</span><span>双色球分析标注</span><span class="version-badge" id="versionBadge">v1.2.0</span></div>
       <div class="group" role="group" aria-label="图表来源">
         <a class="action-button primary-link" href="https://datachart.500.com/ssq/" target="_blank" rel="noopener" title="打开500彩票网双色球图表"><svg class="icon" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><path d="M15 3h6v6"></path><path d="M10 14L21 3"></path></svg>打开源站</a>
         <button class="action-button" type="button" id="refreshChartButton" title="重新载入本地图表数据"><svg class="icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2"></path><path d="M3 12A9 9 0 0 1 18.5 5.8"></path><path d="M18 2v4h-4"></path><path d="M6 22v-4h4"></path></svg>刷新图表</button>
@@ -135,11 +135,12 @@
   <script src="./chart-data.js"></script>
   <script>
     (() => {
-      const APP_VERSION = "v1.1.0";
+      const APP_VERSION = "v1.2.0";
       const STORAGE_SCHEMA_VERSION = 7;
       const STORAGE_KEY = "ssq-analysis-annotations-v1";
       const OLD_KEYS = ["ssq-analysis-annotations-v5", "ssq-analysis-annotations-v4", "ssq-analysis-annotations-v3", "ssq-analysis-annotations-v2"];
       const MARKER_STYLE = Object.freeze({ width: 3, defaultColor: "#79aee8" });
+      const REFRESH_ENDPOINT = "/api/refresh";
       const workspace = document.getElementById("workspace");
       const chartSurface = document.getElementById("chartSurface");
       const chartHost = document.getElementById("chartHost");
@@ -214,6 +215,51 @@
         return hot;
       };
 
+      const normalizeOfficialData = (items) => {
+        const rows = [...items].sort((a, b) => Number(a.code) - Number(b.code)).map((item) => ({
+          issue: String(item.code).slice(2),
+          red: String(item.red || "").split(",").filter(Boolean).map(Number),
+          blue: Number(item.blue)
+        }));
+        const latest = items[0];
+        return {
+          chart: {
+            generatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+            source: "500彩票网",
+            rows
+          },
+          latest: latest ? {
+            issue: latest.code,
+            date: latest.date,
+            red: String(latest.red || "").split(",").filter(Boolean),
+            blue: latest.blue ? [latest.blue] : [],
+            source: "500彩票网",
+            updatedAt: new Date().toLocaleString("zh-CN", { hour12: false })
+          } : null
+        };
+      };
+      const applyLotteryData = (payload) => {
+        if (payload?.chart?.rows?.length) window.SSQ_CHART_DATA = payload.chart;
+        if (payload?.latest) window.SSQ_LATEST = payload.latest;
+        renderChart();
+        resizeCanvas();
+        drawAll();
+      };
+      const refreshLotteryData = async () => {
+        const isLocalServer = location.protocol.startsWith("http") && /^(127\.0\.0\.1|localhost)$/i.test(location.hostname);
+        if (!isLocalServer) {
+          setStatus("请用“打开双色球分析.cmd”打开后再刷新数据");
+          alert("浏览器安全限制不允许 file:// 页面直接刷新官方数据。请双击“打开双色球分析.cmd”启动本地刷新服务后，再点刷新图表。");
+          return false;
+        }
+        setStatus("正在刷新500彩票网数据...");
+        const response = await fetch(`${REFRESH_ENDPOINT}?t=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`刷新失败：HTTP ${response.status}`);
+        const payload = await response.json();
+        applyLotteryData(payload);
+        setStatus(`已更新至 ${window.SSQ_LATEST?.issue || "最新"} 期`);
+        return true;
+      };
       const showLatest = () => {
         const latest = window.SSQ_LATEST || {};
         const rowLatest = window.SSQ_CHART_DATA?.rows?.at(-1);
@@ -301,18 +347,17 @@
         showLatest();
         setTimeout(() => { resizeCanvas(); drawBlueTrendLines(); }, 60);
       };
-      const chartOffset = () => {
-        const canvasRect = canvas.getBoundingClientRect();
-        const hostRect = chartHost.getBoundingClientRect();
-        return { x: hostRect.left - canvasRect.left, y: hostRect.top - canvasRect.top };
-      };
+      const chartOffset = () => ({ x: chartHost.offsetLeft, y: chartHost.offsetTop });
       const getPoint = (event) => { const rect = chartHost.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; };
       const toSurfacePoint = (point) => { const offset = chartOffset(); return { x: point.x + offset.x, y: point.y + offset.y }; };
       const resizeCanvas = () => {
-        const rect = chartSurface.getBoundingClientRect();
-        const width = Math.max(chartSurface.scrollWidth, rect.width);
-        const height = Math.max(chartSurface.scrollHeight, rect.height);
+        const offset = chartOffset();
+        const rect = chartHost.getBoundingClientRect();
+        const width = Math.max(chartHost.scrollWidth, rect.width);
+        const height = Math.max(chartHost.scrollHeight, rect.height);
         const ratio = window.devicePixelRatio || 1;
+        canvas.style.left = `${offset.x}px`;
+        canvas.style.top = `${offset.y}px`;
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
         canvas.width = Math.max(1, Math.floor(width * ratio));
@@ -320,7 +365,7 @@
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
         drawAll();
       };
-      const scheduleResize = () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { resizeCanvas(); drawBlueTrendLines(); }, 80); };
+      const scheduleResize = () => { cancelAnimationFrame(resizeTimer); resizeTimer = requestAnimationFrame(() => { resizeCanvas(); drawBlueTrendLines(); }); };
       const cloneAction = (action) => JSON.parse(JSON.stringify(action));
       const normalizeBounds = (bounds) => ({ x: Math.min(bounds.x, bounds.x + bounds.w), y: Math.min(bounds.y, bounds.y + bounds.h), w: Math.abs(bounds.w), h: Math.abs(bounds.h) });
       const pointsBounds = (points) => {
@@ -423,14 +468,10 @@
       const drawPreview = () => { if (!isDrawing || !startPoint || !previewPoint || currentTool === "pen" || currentTool === "text") return; drawAction({ type: currentTool, start: startPoint, end: previewPoint, ...getStyle() }); };
       const drawAll = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const offset = chartOffset();
-        ctx.save();
-        ctx.translate(offset.x, offset.y);
         actions.forEach((action) => drawAction(action));
         if (currentPath) drawAction(currentPath);
         drawPreview();
         drawSelection();
-        ctx.restore();
       };
       const buildRecordPayload = () => ({
         appVersion: APP_VERSION,
@@ -730,6 +771,7 @@
         canvas.addEventListener("pointerup", onPointerUp);
         canvas.addEventListener("pointercancel", onPointerUp);
         window.addEventListener("resize", scheduleResize);
+        new ResizeObserver(scheduleResize).observe(chartHost);
       };
       const init = () => {
         versionBadge.textContent = APP_VERSION;
