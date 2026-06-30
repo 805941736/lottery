@@ -52,10 +52,10 @@
     .ball.blue { background: var(--blue-ball); }
     .refresh-latest { width: 28px; height: 28px; padding: 0; }
     .workspace { position: relative; min-height: 0; overflow: auto; background: #eef2f7; }
-    .chart-surface { position: relative; width: max-content; min-width: 100%; min-height: 100%; padding: 14px; cursor: default; display: flex; flex-direction: column; align-items: center; }
+    .chart-surface { position: relative; width: max-content; min-width: 100%; min-height: 100%; padding: 14px; cursor: default; display: flex; flex-direction: column; align-items: center; user-select: none; }
     .chart-title { display: flex; align-items: center; justify-content: center; gap: 12px; height: 38px; width: 100%; max-width: 1546px; padding: 0 8px; background: #fff; border: 1px solid var(--grid); border-bottom: 0; font-weight: 700; }
     .chart-meta { color: var(--muted); font-size: 13px; font-weight: 400; }
-    .chart-table { position: relative; z-index: 1; border-collapse: collapse; background: #fff; font-size: 12px; color: #1f2937; table-layout: fixed; margin: 0 auto; }
+    .chart-table { position: relative; z-index: 1; border-collapse: collapse; background: #fff; font-size: 12px; color: #1f2937; table-layout: fixed; margin: 0 auto; user-select: none; }
     .chart-table th, .chart-table td { width: 30px; min-width: 30px; height: 28px; border: 1px solid var(--grid); text-align: center; vertical-align: middle; font-variant-numeric: tabular-nums; }
     .chart-table th.issue-col, .chart-table td.issue-col { width: 68px; min-width: 68px; position: sticky; left: 14px; z-index: 2; background: #fff; font-weight: 700; }
     .chart-table thead th { position: sticky; top: 0; z-index: 3; background: #f8fafc; font-weight: 700; }
@@ -347,7 +347,7 @@
         showLatest();
         setTimeout(() => { resizeCanvas(); drawBlueTrendLines(); }, 60);
       };
-      const chartOffset = () => ({ x: chartHost.offsetLeft, y: chartHost.offsetTop });
+      const chartOffset = () => { const surfaceRect = chartSurface.getBoundingClientRect(); const hostRect = chartHost.getBoundingClientRect(); return { x: hostRect.left - surfaceRect.left, y: hostRect.top - surfaceRect.top }; };
       const getPoint = (event) => { const rect = chartHost.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; };
       const toSurfacePoint = (point) => { const offset = chartOffset(); return { x: point.x + offset.x, y: point.y + offset.y }; };
       const resizeCanvas = () => {
@@ -538,6 +538,7 @@
         const pickCell = elementBelowCanvas(event)?.closest?.("[data-pick-line]");
         if (pickCell) { togglePickCell(pickCell); return; }
         if (!annotationsVisible || currentTool === "hand") return;
+        event.preventDefault();
         canvas.setPointerCapture(event.pointerId);
         const point = getPoint(event);
         if (currentTool === "select") {
@@ -572,6 +573,7 @@
         drawAll();
       };
       const onPointerMove = (event) => {
+        if (isDrawing || editMode) event.preventDefault();
         const point = getPoint(event);
         if (currentTool === "select" && editMode && selectedIndex >= 0) {
           actions[selectedIndex] = cloneAction(editOriginalAction);
@@ -697,6 +699,8 @@
         setStatus(`当前工具：${button.title}`);
       };
       const selectAnnotation = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         if (!annotationsVisible) return;
         const point = getPoint(event);
         const hitIndex = hitActionIndex(point);
