@@ -175,6 +175,7 @@
       let editStartPoint = null;
       let editOriginalAction = null;
       let editOriginalBounds = null;
+      let editHasMoved = false;
       let redMiss = Array(34).fill(0);
       let blueMiss = Array(17).fill(0);
       let strokeColor = swatchButtons.find((button) => button.classList.contains("active"))?.dataset.color || MARKER_STYLE.defaultColor;
@@ -535,6 +536,7 @@
         box.addEventListener("blur", finish, { once: true });
       };
       const onPointerDown = (event) => {
+        if (event.detail > 1) { event.preventDefault(); return; }
         const pickCell = elementBelowCanvas(event)?.closest?.("[data-pick-line]");
         if (pickCell) { togglePickCell(pickCell); return; }
         if (!annotationsVisible || currentTool === "hand") return;
@@ -549,6 +551,7 @@
             editStartPoint = point;
             editOriginalAction = cloneAction(actions[selectedIndex]);
             editOriginalBounds = selectedBounds;
+            editHasMoved = false;
             return;
           }
           const hitIndex = hitActionIndex(point);
@@ -558,6 +561,7 @@
             editStartPoint = point;
             editOriginalAction = cloneAction(actions[hitIndex]);
             editOriginalBounds = actionBounds(actions[hitIndex]);
+            editHasMoved = false;
           } else {
             editMode = null;
           }
@@ -576,8 +580,12 @@
         if (isDrawing || editMode) event.preventDefault();
         const point = getPoint(event);
         if (currentTool === "select" && editMode && selectedIndex >= 0) {
+          const dx = point.x - editStartPoint.x;
+          const dy = point.y - editStartPoint.y;
+          if (!editHasMoved && Math.hypot(dx, dy) < 4) return;
+          editHasMoved = true;
           actions[selectedIndex] = cloneAction(editOriginalAction);
-          if (editMode === "move") moveAction(actions[selectedIndex], point.x - editStartPoint.x, point.y - editStartPoint.y);
+          if (editMode === "move") moveAction(actions[selectedIndex], dx, dy);
           if (editMode.startsWith("resize:")) scaleAction(actions[selectedIndex], editOriginalBounds, boundsFromHandle(editOriginalBounds, editMode.split(":")[1], point));
           drawAll();
           return;
@@ -593,6 +601,7 @@
           editStartPoint = null;
           editOriginalAction = null;
           editOriginalBounds = null;
+          editHasMoved = false;
           scheduleSave();
           return;
         }
@@ -769,6 +778,7 @@
         refreshLatestButton.addEventListener("click", () => { showLatest(); setStatus("已显示最新开奖号"); });
         refreshChartButton.addEventListener("click", () => { location.reload(); });
         document.addEventListener("keydown", handleShortcut);
+        chartHost.addEventListener("dblclick", selectAnnotation);
         canvas.addEventListener("dblclick", selectAnnotation);
         canvas.addEventListener("pointerdown", onPointerDown);
         canvas.addEventListener("pointermove", onPointerMove);
