@@ -141,6 +141,8 @@
       const OLD_KEYS = ["ssq-analysis-annotations-v5", "ssq-analysis-annotations-v4", "ssq-analysis-annotations-v3", "ssq-analysis-annotations-v2"];
       const MARKER_STYLE = Object.freeze({ width: 3, defaultColor: "#79aee8" });
       const REFRESH_ENDPOINT = "/api/refresh";
+      const RECORD_ENDPOINT = "/api/records";
+      const RECORD_FILE_NAME = "ssq-analysis-records.json";
       const workspace = document.getElementById("workspace");
       const chartSurface = document.getElementById("chartSurface");
       const chartHost = document.getElementById("chartHost");
@@ -474,6 +476,7 @@
         drawPreview();
         drawSelection();
       };
+      const isLocalServer = () => location.protocol.startsWith("http") && /^(127\.0\.0\.1|localhost)$/i.test(location.hostname);
       const buildRecordPayload = () => ({
         appVersion: APP_VERSION,
         version: STORAGE_SCHEMA_VERSION,
@@ -482,19 +485,48 @@
         actions,
         picks
       });
-      const save = () => { localStorage.setItem(STORAGE_KEY, JSON.stringify(buildRecordPayload())); setStatus("已自动保存"); };
+      const persistPortableRecord = (payload) => {
+        if (!isLocalServer()) return;
+        fetch(RECORD_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        }).catch((error) => console.warn("portable record save failed", error));
+      };
+      const save = () => {
+        const payload = buildRecordPayload();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        persistPortableRecord(payload);
+        setStatus("已自动保存");
+      };
       const scheduleSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(save, 180); };
       const applyRecordPayload = (payload) => {
         if (Array.isArray(payload.actions)) actions = payload.actions;
         if (payload.picks) picks = { ...picks, ...payload.picks };
         loadedCoordinateSpace = payload.coordinateSpace || "surface";
       };
-      const load = () => {
+      const loadPortableRecord = async () => {
+        if (!isLocalServer()) return false;
         try {
+          const response = await fetch(`${RECORD_ENDPOINT}?t=${Date.now()}`, { cache: "no-store" });
+          if (!response.ok) return false;
+          const payload = await response.json();
+          applyRecordPayload(payload);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+          return true;
+        } catch (error) {
+          console.warn("portable record load failed", error);
+          return false;
+        }
+      };
+      const load = async () => {
+        try {
+          if (await loadPortableRecord()) return;
           let raw = localStorage.getItem(STORAGE_KEY);
           for (const key of OLD_KEYS) if (!raw) raw = localStorage.getItem(key);
           if (!raw) return;
           applyRecordPayload(JSON.parse(raw));
+          persistPortableRecord(buildRecordPayload());
         } catch (error) {
           console.warn(error);
           actions = [];
@@ -779,7 +811,6 @@
         refreshChartButton.addEventListener("click", () => { location.reload(); });
         document.addEventListener("keydown", handleShortcut);
         chartHost.addEventListener("dblclick", selectAnnotation);
-        canvas.addEventListener("dblclick", selectAnnotation);
         canvas.addEventListener("pointerdown", onPointerDown);
         canvas.addEventListener("pointermove", onPointerMove);
         canvas.addEventListener("pointerup", onPointerUp);

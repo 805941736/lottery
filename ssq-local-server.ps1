@@ -5,6 +5,7 @@ $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $chartUrl = 'https://datachart.500.com/ssq/?expect=50'
+$recordPath = Join-Path $PSScriptRoot 'ssq-analysis-records.json'
 $listener = [System.Net.HttpListener]::new()
 $listener.Prefixes.Add("http://127.0.0.1:$Port/")
 try { $listener.Start() } catch { exit 0 }
@@ -14,6 +15,10 @@ function Write-Bytes($response, [byte[]]$bytes, [string]$contentType) {
   $response.ContentLength64 = $bytes.Length
   $response.OutputStream.Write($bytes, 0, $bytes.Length)
   $response.OutputStream.Close()
+}
+function Read-RequestBody($request) {
+  $reader = [System.IO.StreamReader]::new($request.InputStream, [System.Text.Encoding]::UTF8)
+  try { $reader.ReadToEnd() } finally { $reader.Close() }
 }
 function Write-Text($response, [string]$text, [string]$contentType = 'text/plain; charset=utf-8') {
   Write-Bytes $response ([System.Text.Encoding]::UTF8.GetBytes($text)) $contentType
@@ -108,7 +113,27 @@ while ($listener.IsListening) {
     $context = $listener.GetContext()
     $requestPath = [uri]::UnescapeDataString($context.Request.Url.AbsolutePath.TrimStart('/'))
     if ([string]::IsNullOrWhiteSpace($requestPath)) { $requestPath = 'ssq-analysis.html' }
-    if ($requestPath -eq 'api/refresh') {
+    if ($requestPath -eq 'api/records') {
+      if ($context.Request.HttpMethod -eq 'GET') {
+        if (Test-Path -LiteralPath $recordPath -PathType Leaf) {
+          Write-Bytes $context.Response ([IO.File]::ReadAllBytes($recordPath)) 'application/json; charset=utf-8'
+        } else {
+          $context.Response.StatusCode = 404
+          Write-Text $context.Response '{"error":"record file not found"}' 'application/json; charset=utf-8'
+        }
+        continue
+      }
+      if ($context.Request.HttpMethod -eq 'POST') {
+        $body = Read-RequestBody $context.Request
+        try { $null = $body | ConvertFrom-Json } catch { $context.Response.StatusCode = 400; Write-Text $context.Response '{"error":"invalid json"}' 'application/json; charset=utf-8'; continue }
+        [System.IO.File]::WriteAllText($recordPath, $body, [System.Text.UTF8Encoding]::new($false))
+        Write-Text $context.Response '{"ok":true}' 'application/json; charset=utf-8'
+        continue
+      }
+      $context.Response.StatusCode = 405
+      Write-Text $context.Response '{"error":"method not allowed"}' 'application/json; charset=utf-8'
+      continue
+    }    if ($requestPath -eq 'api/refresh') {
       $payload = Merge-WithLocalHistory (Get-500Payload)
       Save-DataFiles $payload
       Write-Text $context.Response ($payload | ConvertTo-Json -Depth 8 -Compress) 'application/json; charset=utf-8'
