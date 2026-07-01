@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>双色球分析标注 v1.2.0</title>
+  <title>双色球分析标注 正式版 v1.2.0</title>
   <style>
     :root {
       --bg: #f5f6f8;
@@ -79,7 +79,7 @@
     .pick-cell:hover { background: #eef4ff; }
     .pick-cell.pick-selected { color: #fff; }
     .canvas-layer { position: absolute; inset: 0 auto auto 0; width: 1px; height: 1px; touch-action: none; cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M8 3v10M3 8h10' stroke='%23374151' stroke-width='1'/%3E%3C/svg%3E") 8 8, crosshair; z-index: 4; }
-    .canvas-layer.hand-mode { cursor: default; pointer-events: none; }
+    .canvas-layer.hand-mode { cursor: default; }
     .canvas-layer.select-mode { cursor: default; }
     .canvas-layer.hidden-layer { opacity: 0; pointer-events: none; }
     .text-box { position: absolute; z-index: 6; min-width: 120px; max-width: 360px; padding: 7px 9px; border: 1px solid #9ca3af; border-radius: 6px; outline: 2px solid rgba(21,94,239,.18); color: var(--text); background: rgba(255,255,255,.94); box-shadow: 0 6px 18px rgba(31,41,55,.18); resize: both; overflow: auto; }
@@ -131,14 +131,14 @@
       <div class="hint" id="hintText">手型模式可拖动/滚动查看图表；选择画笔、直线、箭头、矩形、圆圈或文字后可在图表上标注。</div>
     </section>
   </main>
-  <script src="./latest-ssq.js"></script>
-  <script src="./chart-data.js"></script>
+  <script src="../data/latest-ssq.js"></script>
+  <script src="../data/chart-data.js"></script>
   <script>
     (() => {
       const APP_VERSION = "v1.2.0";
       const STORAGE_SCHEMA_VERSION = 7;
-      const STORAGE_KEY = "ssq-analysis-annotations-v1";
-      const OLD_KEYS = ["ssq-analysis-annotations-v5", "ssq-analysis-annotations-v4", "ssq-analysis-annotations-v3", "ssq-analysis-annotations-v2"];
+      const STORAGE_KEY = "ssq-analysis-portable-record";
+      const OLD_KEYS = ["ssq-analysis-annotations-v1", "ssq-analysis-annotations-v5", "ssq-analysis-annotations-v4", "ssq-analysis-annotations-v3", "ssq-analysis-annotations-v2"];
       const MARKER_STYLE = Object.freeze({ width: 3, defaultColor: "#79aee8" });
       const REFRESH_ENDPOINT = "/api/refresh";
       const RECORD_ENDPOINT = "/api/records";
@@ -172,6 +172,8 @@
       let resizeTimer = 0;
       let saveTimer = 0;
       let annotationsVisible = true;
+      let loadedCoordinateSpace = "chartHost";
+      let loadedChartIssues = null;
       let selectedIndex = -1;
       let editMode = null;
       let editStartPoint = null;
@@ -184,6 +186,7 @@
       const getStyle = () => ({ color: strokeColor, width: MARKER_STYLE.width });
       const setStatus = (text) => { statusText.textContent = text; clearTimeout(statusText._timer); statusText._timer = setTimeout(() => { statusText.textContent = "自动保存已开启"; }, 1800); };
       const ballHtml = (number, color) => `<span class="ball ${color}">${String(number).padStart(2, "0")}</span>`;
+      const currentChartIssues = () => (window.SSQ_CHART_DATA?.rows || []).map((row) => String(row.issue));
       const buildHotRedMap = (rows) => {
         const redRows = rows.map((row) => new Set(row.red.map(Number)));
         const hot = new Set();
@@ -242,17 +245,19 @@
         };
       };
       const applyLotteryData = (payload) => {
+        const previousIssueLayout = captureIssueLayout();
         if (payload?.chart?.rows?.length) window.SSQ_CHART_DATA = payload.chart;
         if (payload?.latest) window.SSQ_LATEST = payload.latest;
         renderChart();
+        syncAnnotationsToIssueLayout(previousIssueLayout);
         resizeCanvas();
         drawAll();
       };
       const refreshLotteryData = async () => {
         const isLocalServer = location.protocol.startsWith("http") && /^(127\.0\.0\.1|localhost)$/i.test(location.hostname);
         if (!isLocalServer) {
-          setStatus("请用“打开双色球分析.cmd”打开后再刷新数据");
-          alert("浏览器安全限制不允许 file:// 页面直接刷新官方数据。请双击“打开双色球分析.cmd”启动本地刷新服务后，再点刷新图表。");
+          setStatus("请用打开双色球分析.cmd打开后再刷新数据");
+          alert("浏览器安全限制不允许 file:// 页面直接刷新官方数据。请双击打开双色球分析.cmd启动本地刷新服务后，再点刷新图表。");
           return false;
         }
         setStatus("正在刷新500彩票网数据...");
@@ -305,6 +310,58 @@
         chartHost.appendChild(svg);
       };
 
+      const captureIssueLayout = () => {
+        const hostRect = chartHost.getBoundingClientRect();
+        const rows = Array.from(chartHost.querySelectorAll(".chart-table tbody tr")).filter((row) => /^\d+$/.test(row.querySelector(".issue-col")?.textContent?.trim() || ""));
+        const positions = new Map();
+        let top = Infinity;
+        let bottom = -Infinity;
+        rows.forEach((row) => {
+          const issue = row.querySelector(".issue-col").textContent.trim();
+          const rect = row.getBoundingClientRect();
+          const rowTop = rect.top - hostRect.top;
+          const rowBottom = rect.bottom - hostRect.top;
+          positions.set(issue, rowTop + rect.height / 2);
+          top = Math.min(top, rowTop);
+          bottom = Math.max(bottom, rowBottom);
+        });
+        return { positions, top, bottom };
+      };
+      const actionTouchesIssueArea = (action, layout) => {
+        const bounds = actionBounds(action);
+        if (!bounds || !Number.isFinite(layout.top) || !Number.isFinite(layout.bottom)) return false;
+        return bounds.y <= layout.bottom + 2 && bounds.y + bounds.h >= layout.top - 2;
+      };
+      const syncAnnotationsToIssueLayout = (previousLayout) => {
+        if (!previousLayout?.positions?.size || !actions.length) return;
+        const nextLayout = captureIssueLayout();
+        const deltas = [];
+        previousLayout.positions.forEach((oldY, issue) => {
+          if (nextLayout.positions.has(issue)) deltas.push(nextLayout.positions.get(issue) - oldY);
+        });
+        if (deltas.length < 3) return;
+        deltas.sort((a, b) => a - b);
+        const deltaY = deltas[Math.floor(deltas.length / 2)];
+        if (Math.abs(deltaY) < 0.5) return;
+        actions.forEach((action) => {
+          if (actionTouchesIssueArea(action, previousLayout)) moveAction(action, 0, deltaY);
+        });
+        scheduleSave();
+      };
+      const layoutFromIssueList = (issues) => {
+        const nextLayout = captureIssueLayout();
+        if (!Array.isArray(issues) || !issues.length || !nextLayout.positions.size) return null;
+        const rowHeight = (nextLayout.bottom - nextLayout.top) / nextLayout.positions.size;
+        if (!Number.isFinite(rowHeight) || rowHeight <= 0) return null;
+        const positions = new Map();
+        issues.map(String).forEach((issue, index) => positions.set(issue, nextLayout.top + rowHeight * (index + 0.5)));
+        return { positions, top: nextLayout.top, bottom: nextLayout.top + rowHeight * issues.length };
+      };
+      const syncLoadedAnnotationsToCurrentChart = () => {
+        if (!loadedChartIssues?.length) return;
+        syncAnnotationsToIssueLayout(layoutFromIssueList(loadedChartIssues));
+        loadedChartIssues = currentChartIssues();
+      };
       const renderChart = () => {
         const rows = window.SSQ_CHART_DATA?.rows || [];
         if (!rows.length) { chartHost.innerHTML = '<div style="padding:24px;background:#fff;border:1px solid #d7dce3">未找到本地图表数据，请运行“打开双色球分析.cmd”刷新。</div>'; return; }
@@ -458,6 +515,16 @@
       };
       const drawLine = (context, start, end) => { context.beginPath(); context.moveTo(start.x, start.y); context.lineTo(end.x, end.y); context.stroke(); };
       const drawArrowHead = (context, start, end, width) => { const angle = Math.atan2(end.y - start.y, end.x - start.x); const size = Math.max(12, width * 4); context.beginPath(); context.moveTo(end.x, end.y); context.lineTo(end.x - size * Math.cos(angle - Math.PI / 6), end.y - size * Math.sin(angle - Math.PI / 6)); context.lineTo(end.x - size * Math.cos(angle + Math.PI / 6), end.y - size * Math.sin(angle + Math.PI / 6)); context.closePath(); context.fill(); };
+      const snapLinePoint = (start, point) => {
+        const dx = point.x - start.x;
+        const dy = point.y - start.y;
+        const length = Math.hypot(dx, dy);
+        if (!length) return point;
+        const angle = Math.atan2(dy, dx);
+        const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+        return { x: start.x + Math.cos(snappedAngle) * length, y: start.y + Math.sin(snappedAngle) * length };
+      };
+      const drawingPoint = (point, event) => (event.shiftKey && (currentTool === "line" || currentTool === "arrow") && startPoint ? snapLinePoint(startPoint, point) : point);
       const rectFromPoints = (start, end) => ({ x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), w: Math.abs(end.x - start.x), h: Math.abs(end.y - start.y) });
       const drawAction = (action, context = ctx) => {
         context.save(); context.lineWidth = action.width; context.strokeStyle = action.color; context.fillStyle = action.color; context.lineCap = "round"; context.lineJoin = "round";
@@ -482,51 +549,77 @@
         version: STORAGE_SCHEMA_VERSION,
         coordinateSpace: "chartHost",
         savedAt: new Date().toISOString(),
+        chartIssues: currentChartIssues(),
         actions,
         picks
       });
-      const persistPortableRecord = (payload) => {
-        if (!isLocalServer()) return;
-        fetch(RECORD_ENDPOINT, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        }).catch((error) => console.warn("portable record save failed", error));
+      const persistPortableRecord = async (payload) => {
+        if (!isLocalServer()) return false;
+        try {
+          const response = await fetch(RECORD_ENDPOINT, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          return response.ok;
+        } catch (error) {
+          console.warn("portable record save failed", error);
+          return false;
+        }
       };
-      const save = () => {
+      const save = async () => {
         const payload = buildRecordPayload();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-        persistPortableRecord(payload);
-        setStatus("已自动保存");
+        const portableSaved = await persistPortableRecord(payload);
+        setStatus(isLocalServer() && !portableSaved ? "已保存到浏览器，移动硬盘记录写入失败" : "已自动保存");
       };
       const scheduleSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(save, 180); };
       const applyRecordPayload = (payload) => {
         if (Array.isArray(payload.actions)) actions = payload.actions;
         if (payload.picks) picks = { ...picks, ...payload.picks };
         loadedCoordinateSpace = payload.coordinateSpace || "surface";
+        loadedChartIssues = Array.isArray(payload.chartIssues) ? payload.chartIssues.map(String) : null;
       };
-      const loadPortableRecord = async () => {
-        if (!isLocalServer()) return false;
+      const parseRecordPayload = (raw) => {
+        if (!raw) return null;
+        try { return JSON.parse(raw); } catch { return null; }
+      };
+      const hasRecordContent = (payload) => {
+        const hasActions = Array.isArray(payload?.actions) && payload.actions.length > 0;
+        const hasPicks = Object.values(payload?.picks || {}).some((group) => ["red", "blue"].some((color) => Array.isArray(group?.[color]) && group[color].length > 0));
+        return hasActions || hasPicks;
+      };
+      const recordTime = (payload) => {
+        const time = payload?.savedAt ? Date.parse(payload.savedAt) : 0;
+        return Number.isFinite(time) ? time : 0;
+      };
+      const chooseRecordPayload = (portable, local) => {
+        if (hasRecordContent(portable) && !hasRecordContent(local)) return portable;
+        if (hasRecordContent(local) && !hasRecordContent(portable)) return local;
+        if (portable && local) return recordTime(local) > recordTime(portable) ? local : portable;
+        return portable || local || null;
+      };
+      const readLocalRecordPayload = () => {
+        let raw = localStorage.getItem(STORAGE_KEY);
+        for (const key of OLD_KEYS) if (!raw) raw = localStorage.getItem(key);
+        return parseRecordPayload(raw);
+      };
+      const fetchPortableRecordPayload = async () => {
+        if (!isLocalServer()) return null;
         try {
           const response = await fetch(`${RECORD_ENDPOINT}?t=${Date.now()}`, { cache: "no-store" });
-          if (!response.ok) return false;
-          const payload = await response.json();
-          applyRecordPayload(payload);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-          return true;
+          if (!response.ok) return null;
+          return parseRecordPayload(await response.text());
         } catch (error) {
           console.warn("portable record load failed", error);
-          return false;
+          return null;
         }
       };
       const load = async () => {
         try {
-          if (await loadPortableRecord()) return;
-          let raw = localStorage.getItem(STORAGE_KEY);
-          for (const key of OLD_KEYS) if (!raw) raw = localStorage.getItem(key);
-          if (!raw) return;
-          applyRecordPayload(JSON.parse(raw));
-          persistPortableRecord(buildRecordPayload());
+          const payload = chooseRecordPayload(await fetchPortableRecordPayload(), readLocalRecordPayload());
+          if (!payload) return;
+          applyRecordPayload(payload);
         } catch (error) {
           console.warn(error);
           actions = [];
@@ -539,7 +632,7 @@
         loadedCoordinateSpace = "chartHost";
         scheduleSave();
       };
-      const undoLastAction = () => { actions.pop(); drawAll(); scheduleSave(); setStatus("已撤销"); };
+      const undoLastAction = () => { if (!actions.length) return setStatus("没有可撤销的标注"); actions.pop(); drawAll(); scheduleSave(); setStatus("已撤销"); };
       const commitAction = (action) => { actions.push(action); currentPath = null; previewPoint = null; isDrawing = false; drawAll(); scheduleSave(); };
       const beginText = (point) => {
         const box = document.createElement("textarea");
@@ -567,40 +660,55 @@
         });
         box.addEventListener("blur", finish, { once: true });
       };
+      const selectAnnotationAtPoint = (point) => {
+        const hitIndex = hitActionIndex(point);
+        if (hitIndex < 0) return false;
+        selectedIndex = hitIndex;
+        editMode = null;
+        drawAll();
+        setStatus("已选中标注，可拖动移动或拖四角缩放");
+        return true;
+      };
+      const beginEditAtPoint = (point) => {
+        const selectedBounds = actionBounds(actions[selectedIndex]);
+        if (!selectedBounds) return false;
+        const handle = selectionHandle(point, selectedBounds);
+        if (handle) {
+          editMode = `resize:${handle}`;
+          editStartPoint = point;
+          editOriginalAction = cloneAction(actions[selectedIndex]);
+          editOriginalBounds = selectedBounds;
+          editHasMoved = false;
+          return true;
+        }
+        if (!pointInBounds(point, selectedBounds, 8)) return false;
+        editMode = "move";
+        editStartPoint = point;
+        editOriginalAction = cloneAction(actions[selectedIndex]);
+        editOriginalBounds = selectedBounds;
+        editHasMoved = false;
+        return true;
+      };
       const onPointerDown = (event) => {
         if (event.detail > 1) { event.preventDefault(); return; }
+        const point = getPoint(event);
+        if (annotationsVisible && beginEditAtPoint(point)) {
+          event.preventDefault();
+          canvas.setPointerCapture(event.pointerId);
+          return;
+        }
         const pickCell = elementBelowCanvas(event)?.closest?.("[data-pick-line]");
         if (pickCell) { togglePickCell(pickCell); return; }
+        if (selectedIndex >= 0) {
+          selectedIndex = -1;
+          editMode = null;
+          drawAll();
+          setStatus("已取消选中");
+          return;
+        }
         if (!annotationsVisible || currentTool === "hand") return;
         event.preventDefault();
         canvas.setPointerCapture(event.pointerId);
-        const point = getPoint(event);
-        if (currentTool === "select") {
-          const selectedBounds = actionBounds(actions[selectedIndex]);
-          const handle = selectedBounds ? selectionHandle(point, selectedBounds) : null;
-          if (handle) {
-            editMode = `resize:${handle}`;
-            editStartPoint = point;
-            editOriginalAction = cloneAction(actions[selectedIndex]);
-            editOriginalBounds = selectedBounds;
-            editHasMoved = false;
-            return;
-          }
-          const hitIndex = hitActionIndex(point);
-          selectedIndex = hitIndex;
-          if (hitIndex >= 0) {
-            editMode = "move";
-            editStartPoint = point;
-            editOriginalAction = cloneAction(actions[hitIndex]);
-            editOriginalBounds = actionBounds(actions[hitIndex]);
-            editHasMoved = false;
-          } else {
-            editMode = null;
-          }
-          drawAll();
-          return;
-        }
-        selectedIndex = -1;
         if (currentTool === "text") { beginText(point); return; }
         isDrawing = true;
         startPoint = point;
@@ -611,7 +719,7 @@
       const onPointerMove = (event) => {
         if (isDrawing || editMode) event.preventDefault();
         const point = getPoint(event);
-        if (currentTool === "select" && editMode && selectedIndex >= 0) {
+        if (editMode && selectedIndex >= 0) {
           const dx = point.x - editStartPoint.x;
           const dy = point.y - editStartPoint.y;
           if (!editHasMoved && Math.hypot(dx, dy) < 4) return;
@@ -623,12 +731,12 @@
           return;
         }
         if (!isDrawing) return;
-        previewPoint = point;
+        previewPoint = drawingPoint(point, event);
         if (currentTool === "pen" && currentPath) currentPath.points.push(point);
         drawAll();
       };
       const onPointerUp = (event) => {
-        if (currentTool === "select" && editMode) {
+        if (editMode) {
           editMode = null;
           editStartPoint = null;
           editOriginalAction = null;
@@ -638,7 +746,7 @@
           return;
         }
         if (!isDrawing) return;
-        const point = getPoint(event);
+        const point = drawingPoint(getPoint(event), event);
         if (currentTool === "pen" && currentPath) { commitAction(currentPath); return; }
         const dx = Math.abs(point.x - startPoint.x), dy = Math.abs(point.y - startPoint.y);
         if (dx < 3 && dy < 3) { currentPath = null; previewPoint = null; isDrawing = false; drawAll(); return; }
@@ -667,8 +775,9 @@
       const restoreRecordPayload = (payload) => {
         applyRecordPayload(payload);
         renderChart();
-        resizeCanvas();
         migrateLoadedCoordinates();
+        syncLoadedAnnotationsToCurrentChart();
+        resizeCanvas();
         drawAll();
         save();
         setStatus("已导入记录文件");
@@ -743,16 +852,12 @@
         event.preventDefault();
         event.stopPropagation();
         if (!annotationsVisible) return;
-        const point = getPoint(event);
-        const hitIndex = hitActionIndex(point);
-        if (hitIndex < 0) return;
-        selectedIndex = hitIndex;
-        currentTool = "select";
-        canvas.classList.remove("hand-mode");
-        canvas.classList.add("select-mode");
-        toolButtons.forEach((item) => item.classList.remove("active"));
-        drawAll();
-        setStatus("已选中标注，可拖动移动或拖四角缩放");
+        if (!selectAnnotationAtPoint(getPoint(event))) {
+          selectedIndex = -1;
+          editMode = null;
+          drawAll();
+          setStatus("已取消选中");
+        }
       };
       const handleShortcut = (event) => {
         const isEditable = ["INPUT", "TEXTAREA"].includes(event.target.tagName);
@@ -807,10 +912,12 @@
           link.click();
           setStatus("已导出标注PNG");
         });
-        refreshLatestButton.addEventListener("click", () => { showLatest(); setStatus("已显示最新开奖号"); });
-        refreshChartButton.addEventListener("click", () => { location.reload(); });
+        const refreshWithStatus = () => refreshLotteryData().catch((error) => { console.warn(error); setStatus("刷新失败，请稍后重试"); });
+        refreshLatestButton.addEventListener("click", refreshWithStatus);
+        refreshChartButton.addEventListener("click", refreshWithStatus);
         document.addEventListener("keydown", handleShortcut);
         chartHost.addEventListener("dblclick", selectAnnotation);
+        canvas.addEventListener("dblclick", selectAnnotation);
         canvas.addEventListener("pointerdown", onPointerDown);
         canvas.addEventListener("pointermove", onPointerMove);
         canvas.addEventListener("pointerup", onPointerUp);
@@ -818,12 +925,15 @@
         window.addEventListener("resize", scheduleResize);
         new ResizeObserver(scheduleResize).observe(chartHost);
       };
-      const init = () => {
+      const init = async () => {
         versionBadge.textContent = APP_VERSION;
         bindEvents();
-        load();
+        await load();
         renderChart();
+        migrateLoadedCoordinates();
+        syncLoadedAnnotationsToCurrentChart();
         resizeCanvas();
+        drawAll();
         setStatus(actions.length ? "已恢复上次标注" : "自动保存已开启");
       };
       init();
@@ -831,6 +941,9 @@
   </script>
 </body>
 </html>
+
+
+
 
 
 
