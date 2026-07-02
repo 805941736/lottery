@@ -1,5 +1,5 @@
 ﻿param(
-  [int]$Port = 0,
+  [int]$Port = 8765,
   [switch]$Open
 )
 $ErrorActionPreference = 'Stop'
@@ -176,6 +176,10 @@ function Save-DataFiles($payload) {
 function Handle-Request($client, $request) {
   $requestPath = [uri]::UnescapeDataString(($request.Path -split '\?', 2)[0].TrimStart('/'))
   if ([string]::IsNullOrWhiteSpace($requestPath)) { $requestPath = 'app/index.html' }
+  if ($requestPath -eq 'launch-ready.js') {
+    Write-Text $client 'window.__SSQ_READY__ = true;' 'application/javascript; charset=utf-8'
+    return
+  }
   if ($requestPath -eq 'api/records') {
     if ($request.Method -eq 'GET') {
       if (Test-Path -LiteralPath $recordPath -PathType Leaf) { Write-Bytes $client ([IO.File]::ReadAllBytes($recordPath)) 'application/json; charset=utf-8' } else { Write-Text $client '{"error":"record file not found"}' 'application/json; charset=utf-8' '404 Not Found' }
@@ -211,6 +215,7 @@ function Handle-Request($client, $request) {
 }
 
 if (Open-ExistingServerIfAvailable) { exit 0 }
+if (Test-ExistingServer $Port) { if ($Open) { Start-Process "http://127.0.0.1:$Port/" }; exit 0 }
 $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Parse('127.0.0.1'), $Port)
 $listener.Start()
 $ActualPort = $listener.LocalEndpoint.Port

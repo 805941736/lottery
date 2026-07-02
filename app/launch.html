@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>正在打开双色球分析</title>
+  <style>
+    html, body { height: 100%; margin: 0; font-family: "Microsoft YaHei", Arial, sans-serif; background: #f5f7fb; color: #1f2937; }
+    body { display: grid; place-items: center; }
+    .box { padding: 22px 26px; border: 1px solid #d7dce3; border-radius: 10px; background: #fff; box-shadow: 0 12px 30px rgba(31,41,55,.12); }
+    .title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .text { color: #6b7280; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="title">正在打开双色球分析标注</div>
+    <div class="text">本地服务启动后会自动进入图表页面。</div>
+  </div>
+  <script>
+    const target = "http://127.0.0.1:8765/";
+    let attempts = 0;
+    const probe = () => {
+      attempts += 1;
+      const script = document.createElement("script");
+      script.src = `${target}launch-ready.js?t=${Date.now()}`;
+      script.onload = () => location.replace(target);
+      script.onerror = () => {
+        script.remove();
+        setTimeout(probe, attempts < 80 ? 120 : 600);
+      };
+      document.head.appendChild(script);
+    };
+    probe();
+  </script>
+</body>
+</html>
