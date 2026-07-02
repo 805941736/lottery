@@ -24,9 +24,9 @@
     html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); }
     body { overflow: hidden; }
     button, input { font: inherit; }
-    .app { display: grid; grid-template-rows: auto 1fr; height: 100%; min-width: 1100px; }
+    .app { display: grid; grid-template-rows: auto 1fr; width: 100vw; height: 100%; min-width: 0; overflow: hidden; }
     .toolbar {
-      display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 10px 14px;
+      display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 10px 14px; overflow-x: auto; overflow-y: hidden;
       background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: 0 8px 24px rgba(31,41,55,.1); z-index: 5;
     }
     .brand { display: flex; align-items: center; gap: 9px; margin-right: 8px; white-space: nowrap; font-weight: 700; }
@@ -51,8 +51,8 @@
     .ball.red { background: var(--red-ball); }
     .ball.blue { background: var(--blue-ball); }
     .refresh-latest { width: 28px; height: 28px; padding: 0; }
-    .workspace { position: relative; min-height: 0; overflow: auto; background: #eef2f7; }
-    .chart-surface { position: relative; width: max-content; min-width: 100%; min-height: 100%; padding: 14px; cursor: default; display: flex; flex-direction: column; align-items: center; user-select: none; }
+    .workspace { position: relative; min-width: 0; min-height: 0; overflow: auto; background: #eef2f7; scrollbar-gutter: stable both-edges; }
+    .chart-surface { position: relative; width: max-content; min-width: 100%; min-height: 100%; padding: 14px 14px 48vh; cursor: default; display: flex; flex-direction: column; align-items: center; user-select: none; }
     .chart-title { display: flex; align-items: center; justify-content: center; gap: 12px; height: 38px; width: 100%; max-width: 1546px; padding: 0 8px; background: #fff; border: 1px solid var(--grid); border-bottom: 0; font-weight: 700; }
     .chart-meta { color: var(--muted); font-size: 13px; font-weight: 400; }
     .chart-table { position: relative; z-index: 1; border-collapse: collapse; background: #fff; font-size: 12px; color: #1f2937; table-layout: fixed; margin: 0 auto; user-select: none; }
@@ -85,7 +85,7 @@
     .text-box { position: absolute; z-index: 6; min-width: 120px; max-width: 360px; padding: 7px 9px; border: 1px solid #9ca3af; border-radius: 6px; outline: 2px solid rgba(21,94,239,.18); color: var(--text); background: rgba(255,255,255,.94); box-shadow: 0 6px 18px rgba(31,41,55,.18); resize: both; overflow: auto; }
     .hint { position: fixed; right: 16px; bottom: 14px; z-index: 8; max-width: 620px; padding: 9px 11px; color: #374151; background: rgba(255,255,255,.94); border: 1px solid rgba(215,220,227,.9); border-radius: 8px; font-size: 13px; box-shadow: 0 6px 18px rgba(31,41,55,.08); }
     .hidden-input { display: none; }
-    @media (max-width: 1000px) { body { overflow: auto; } .app { min-width: 760px; } .toolbar { flex-wrap: wrap; align-content: flex-start; } .status { margin-left: 0; text-align: left; } }
+    @media (max-width: 1000px) { .status { margin-left: 0; text-align: left; } }
   </style>
 </head>
 <body>
