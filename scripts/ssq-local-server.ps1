@@ -21,11 +21,16 @@ function Backup-RecordFile {
 }
 
 function Test-ExistingServer([int]$candidatePort) {
+  if ($candidatePort -le 0) { return $false }
+  $client = [Net.Sockets.TcpClient]::new()
   try {
-    $response = Invoke-WebRequest -Uri "http://127.0.0.1:$candidatePort/" -UseBasicParsing -TimeoutSec 1
-    return ($response.StatusCode -eq 200 -and $response.Content -like '*双色球分析标注*')
+    $task = $client.ConnectAsync('127.0.0.1', $candidatePort)
+    if (-not $task.Wait(150)) { return $false }
+    return $client.Connected
   } catch {
     return $false
+  } finally {
+    $client.Close()
   }
 }
 function Open-ExistingServerIfAvailable {

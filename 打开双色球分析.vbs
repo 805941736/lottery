@@ -6,7 +6,7 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 
 root = fso.GetParentFolderName(WScript.ScriptFullName)
 scriptPath = fso.BuildPath(root, "scripts\ssq-local-server.ps1")
-command = "powershell -NoProfile -ExecutionPolicy Bypass -File " & Quote(scriptPath) & " -Port 0 -Open"
+command = Quote(shell.ExpandEnvironmentStrings("%SystemRoot%") & "\System32\WindowsPowerShell\v1.0\powershell.exe") & " -NoProfile -NonInteractive -ExecutionPolicy Bypass -File " & Quote(scriptPath) & " -Port 0 -Open"
 
 shell.Run command, 0, False
 
