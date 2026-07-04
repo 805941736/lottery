@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>双色球分析标注 正式版 v1.2.0</title>
+  <title>双色球分析标注 正式版 v1.0</title>
   <style>
     :root {
       --bg: #f5f6f8;
@@ -92,7 +92,7 @@
 <body>
   <main class="app">
     <section class="toolbar" aria-label="标注工具栏">
-      <div class="brand"><span class="brand-mark">SSQ</span><span>双色球分析标注</span><span class="version-badge" id="versionBadge">v1.2.0</span></div>
+      <div class="brand"><span class="brand-mark">SSQ</span><span>双色球分析标注</span><span class="version-badge" id="versionBadge">v1.0</span></div>
       <div class="group" role="group" aria-label="图表来源">
         <a class="action-button primary-link" href="https://datachart.500.com/ssq/" target="_blank" rel="noopener" title="打开500彩票网双色球图表"><svg class="icon" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><path d="M15 3h6v6"></path><path d="M10 14L21 3"></path></svg>打开源站</a>
         <button class="action-button" type="button" id="refreshChartButton" title="重新载入本地图表数据"><svg class="icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2"></path><path d="M3 12A9 9 0 0 1 18.5 5.8"></path><path d="M18 2v4h-4"></path><path d="M6 22v-4h4"></path></svg>刷新图表</button>
@@ -136,7 +136,7 @@
   <script src="../data/chart-data.js"></script>
   <script>
     (() => {
-      const APP_VERSION = "v1.2.0";
+      const APP_VERSION = "v1.0";
       const STORAGE_SCHEMA_VERSION = 7;
       const STORAGE_KEY = "ssq-analysis-portable-record";
       const OLD_KEYS = ["ssq-analysis-annotations-v1", "ssq-analysis-annotations-v5", "ssq-analysis-annotations-v4", "ssq-analysis-annotations-v3", "ssq-analysis-annotations-v2"];
@@ -942,15 +942,3 @@
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
