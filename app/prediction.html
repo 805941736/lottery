@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>双色球预测区</title>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #d7dce3;
+      --red: #d77777;
+      --blue: #45a8db;
+      --accent: #155eef;
+      --accent-soft: #edf4ff;
+      font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    button, input, select { font: inherit; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: 0 8px 22px rgba(31,41,55,.08); }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+    .mark { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: #fff; background: linear-gradient(135deg,#d77777,#45a8db); }
+    .nav { display: flex; flex-wrap: wrap; gap: 8px; }
+    .link, .button { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 7px; color: var(--text); background: #fff; text-decoration: none; cursor: pointer; }
+    .button.primary { border-color: #b8cdfb; color: var(--accent); background: var(--accent-soft); }
+    .layout { width: min(1180px, calc(100vw - 32px)); margin: 18px auto 36px; display: grid; gap: 12px; }
+    .panel { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 12px; }
+    .panel h1, .panel h2 { margin: 0 0 10px; font-size: 16px; }
+    .grid { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(320px, .8fr); gap: 12px; align-items: start; }
+    .line-list { display: grid; gap: 8px; }
+    .pick-line { display: grid; grid-template-columns: 72px 1fr; gap: 10px; align-items: start; padding: 8px; border: 1px solid #e5e7eb; border-radius: 7px; background: #fbfcff; }
+    .pick-line strong { padding-top: 5px; font-size: 13px; }
+    .number-input { width: 100%; min-height: 32px; border: 1px solid #cbd5e1; border-radius: 7px; padding: 5px 8px; }
+    .preview { display: flex; flex-wrap: wrap; gap: 4px; min-height: 28px; margin-top: 6px; }
+    .ball { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: #fff; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .ball.red { background: var(--red); }
+    .ball.blue { background: var(--blue); }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .controls label { display: inline-flex; align-items: center; gap: 6px; color: #374151; font-size: 13px; }
+    .small-input, select { min-height: 32px; border: 1px solid #cbd5e1; border-radius: 7px; padding: 4px 7px; background: #fff; }
+    .small-input { width: 76px; }
+    .hint { color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .status { min-height: 20px; color: var(--muted); font-size: 13px; }
+    .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; }
+    .metric { border: 1px solid #e5e7eb; border-radius: 7px; padding: 8px; background: #f8fafc; font-size: 13px; }
+    .metric b { display: block; margin-bottom: 4px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .metric-grid { grid-template-columns: repeat(2, 1fr); } .topbar { align-items: flex-start; flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="mark">SSQ</span><span>预测区</span></div>
+    <nav class="nav" aria-label="功能导航">
+      <a class="link" href="./index.html">分析页</a>
+      <a class="link" href="./strategy.html">策略库</a>
+      <a class="link" href="./backtest.html">回测区</a>
+    </nav>
+  </header>
+  <main class="layout">
+    <section class="panel">
+      <h1>预测号码录入</h1>
+      <div class="grid">
+        <div class="line-list" id="pickLines"></div>
+        <div class="panel">
+          <h2>快速生成</h2>
+          <div class="controls">
+            <label>生成到
+              <select id="targetLine">
+                <option value="1">自选</option>
+                <option value="2">机选1</option>
+                <option value="3">机选2</option>
+              </select>
+            </label>
+            <label>热号权重 <input class="small-input" id="hotWeight" type="number" min="0" max="10" value="3"></label>
+            <label>遗漏权重 <input class="small-input" id="missWeight" type="number" min="0" max="10" value="2"></label>
+            <button class="button primary" id="generateButton" type="button">生成</button>
+            <button class="button" id="saveButton" type="button">保存</button>
+            <button class="button" id="clearButton" type="button">清空</button>
+          </div>
+          <p class="hint">输入格式支持“01 05 12 18 23 31 08”或连续 14 位数字；前 6 个按红球处理，第 7 个按蓝球处理。</p>
+          <div class="status" id="statusText"></div>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>当前数据概览</h2>
+      <div class="metric-grid" id="metrics"></div>
+    </section>
+  </main>
+  <script src="../data/chart-data.js"></script>
+  <script>
+    (() => {
+      const STORAGE_KEY = "ssq-analysis-portable-record";
+      const STORAGE_SCHEMA_VERSION = 10;
+      const labels = { 1: "自选", 2: "机选1", 3: "机选2" };
+      const rows = window.SSQ_CHART_DATA?.rows || [];
+      let picks = { 1: { red: [], blue: [] }, 2: { red: [], blue: [] }, 3: { red: [], blue: [] } };
+      const pickLines = document.getElementById("pickLines");
+      const metrics = document.getElementById("metrics");
+      const statusText = document.getElementById("statusText");
+      const uniqueSorted = (items, max) => [...new Set((items || []).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= max))].sort((a, b) => a - b);
+      const ball = (n, color) => `<span class="ball ${color}">${String(n).padStart(2, "0")}</span>`;
+      const setStatus = (text) => { statusText.textContent = text; };
+      const normalize = () => {
+        for (let line = 1; line <= 3; line += 1) {
+          picks[line] = picks[line] || { red: [], blue: [] };
+          picks[line].red = uniqueSorted(picks[line].red, 33).slice(0, 6);
+          picks[line].blue = uniqueSorted(picks[line].blue, 16).slice(0, 1);
+        }
+      };
+      const readPayload = () => {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); }
+        catch { return {}; }
+      };
+      const readRecord = () => {
+        const payload = readPayload();
+        if (payload.picks) picks = { ...picks, ...payload.picks };
+        normalize();
+      };
+      const saveRecord = () => {
+        normalize();
+        const previous = readPayload();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...previous, version: STORAGE_SCHEMA_VERSION, savedAt: new Date().toISOString(), picks }));
+        setStatus("已保存，分析页和回测区会读取同一份预测号。");
+      };
+      const parseInput = (value) => {
+        const raw = String(value || "").trim();
+        const digits = raw.replace(/\D/g, "");
+        const numbers = raw && /^\d{14}$/.test(digits) ? digits.match(/\d{2}/g).map(Number) : (raw.match(/\d{1,2}/g) || []).map(Number);
+        return { red: uniqueSorted(numbers.slice(0, 6), 33), blue: uniqueSorted(numbers.slice(6, 7), 16) };
+      };
+      const inputValue = (pick) => [...uniqueSorted(pick.red, 33), ...uniqueSorted(pick.blue, 16)].map((n) => String(n).padStart(2, "0")).join(" ");
+      const renderPick = (pick) => {
+        const red = uniqueSorted(pick.red, 33);
+        const blue = uniqueSorted(pick.blue, 16);
+        return red.map((n) => ball(n, "red")).join("") + blue.map((n) => ball(n, "blue")).join("");
+      };
+      const render = () => {
+        normalize();
+        pickLines.innerHTML = [1, 2, 3].map((line) => `<div class="pick-line"><strong>${labels[line]}</strong><div><input class="number-input" data-line="${line}" value="${inputValue(picks[line])}" placeholder="01 05 12 18 23 31 08"><div class="preview">${renderPick(picks[line])}</div></div></div>`).join("");
+      };
+      const numberStats = (max, key) => {
+        const count = Array(max + 1).fill(0);
+        const miss = Array(max + 1).fill(0);
+        rows.forEach((row) => {
+          const set = new Set(key === "red" ? row.red.map(Number) : [Number(row.blue)]);
+          for (let n = 1; n <= max; n += 1) {
+            if (set.has(n)) { count[n] += 1; miss[n] = 0; }
+            else miss[n] += 1;
+          }
+        });
+        return { count, miss };
+      };
+      const weightedPick = (max, take, stats, hotWeight, missWeight) => {
+        const pool = Array.from({ length: max }, (_, index) => index + 1);
+        const picked = [];
+        while (picked.length < take && pool.length) {
+          const weights = pool.map((n) => 1 + stats.count[n] * hotWeight + Math.min(stats.miss[n], 12) * missWeight);
+          const total = weights.reduce((sum, item) => sum + item, 0);
+          let cursor = Math.random() * total;
+          let chosenIndex = 0;
+          for (; chosenIndex < weights.length; chosenIndex += 1) {
+            cursor -= weights[chosenIndex];
+            if (cursor <= 0) break;
+          }
+          picked.push(pool.splice(Math.min(chosenIndex, pool.length - 1), 1)[0]);
+        }
+        return picked.sort((a, b) => a - b);
+      };
+      document.getElementById("generateButton").addEventListener("click", () => {
+        const line = Number(document.getElementById("targetLine").value);
+        const hotWeight = Number(document.getElementById("hotWeight").value) || 0;
+        const missWeight = Number(document.getElementById("missWeight").value) || 0;
+        picks[line] = {
+          red: weightedPick(33, 6, numberStats(33, "red"), hotWeight, missWeight),
+          blue: weightedPick(16, 1, numberStats(16, "blue"), hotWeight, missWeight)
+        };
+        render();
+        saveRecord();
+      });
+      pickLines.addEventListener("input", (event) => {
+        const input = event.target.closest("[data-line]");
+        if (!input) return;
+        picks[Number(input.dataset.line)] = parseInput(input.value);
+        input.parentElement.querySelector(".preview").innerHTML = renderPick(picks[Number(input.dataset.line)]);
+      });
+      document.getElementById("saveButton").addEventListener("click", saveRecord);
+      document.getElementById("clearButton").addEventListener("click", () => { picks = { 1: { red: [], blue: [] }, 2: { red: [], blue: [] }, 3: { red: [], blue: [] } }; render(); saveRecord(); });
+      const latest = rows.at(-1);
+      metrics.innerHTML = [
+        ["本地数据", `${rows.length} 期`],
+        ["最新期号", latest?.issue || "暂无"],
+        ["最新红球", latest ? latest.red.map((n) => String(n).padStart(2, "0")).join(" ") : "暂无"],
+        ["最新蓝球", latest ? String(latest.blue).padStart(2, "0") : "暂无"]
+      ].map(([title, value]) => `<div class="metric"><b>${title}</b>${value}</div>`).join("");
+      readRecord();
+      render();
+    })();
+  </script>
+</body>
+</html>
+
+

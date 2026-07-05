@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>双色球回测区</title>
+  <style>
+    :root { --bg:#f5f6f8; --panel:#fff; --text:#1f2937; --muted:#6b7280; --line:#d7dce3; --red:#d77777; --blue:#45a8db; --accent:#155eef; --accent-soft:#edf4ff; font-family:"Microsoft YaHei","PingFang SC",Arial,sans-serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--text); background:var(--bg); }
+    button, input { font:inherit; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 18px; background:var(--panel); border-bottom:1px solid var(--line); box-shadow:0 8px 22px rgba(31,41,55,.08); }
+    .brand { display:flex; align-items:center; gap:10px; font-weight:700; }
+    .mark { display:inline-grid; place-items:center; width:34px; height:34px; color:#fff; border-radius:50%; background:linear-gradient(135deg,#d77777,#45a8db); }
+    .nav { display:flex; flex-wrap:wrap; gap:8px; }
+    .link, .button { display:inline-flex; align-items:center; justify-content:center; min-height:32px; padding:0 10px; border:1px solid #cbd5e1; border-radius:7px; color:var(--text); background:#fff; text-decoration:none; cursor:pointer; }
+    .button.primary { border-color:#b8cdfb; color:var(--accent); background:var(--accent-soft); }
+    .layout { width:min(1180px, calc(100vw - 32px)); margin:18px auto 36px; display:grid; gap:12px; }
+    .panel { border:1px solid var(--line); border-radius:8px; background:var(--panel); padding:12px; }
+    h1, h2 { margin:0 0 10px; font-size:16px; }
+    .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    .controls label { display:inline-flex; align-items:center; gap:6px; color:#374151; font-size:13px; }
+    .small-input { width:82px; min-height:32px; border:1px solid #cbd5e1; border-radius:7px; padding:4px 7px; }
+    .summary { display:grid; grid-template-columns:repeat(4, minmax(120px,1fr)); gap:8px; }
+    .metric { border:1px solid #e5e7eb; border-radius:7px; padding:8px; background:#f8fafc; font-size:13px; }
+    .metric b { display:block; margin-bottom:4px; }
+    .metric-line { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .metric-extra { margin-left:auto; font-weight:700; color:#0f172a; white-space:nowrap; }
+    .pick { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+    .ball { display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%; color:#fff; font-size:12px; font-weight:700; font-variant-numeric:tabular-nums; }
+    .ball.red { background:var(--red); }
+    .ball.blue { background:var(--blue); }
+    details { border:1px solid #e5e7eb; border-radius:8px; background:#fff; overflow:hidden; }
+    summary { display:flex; justify-content:space-between; gap:10px; padding:8px 10px; cursor:pointer; background:#f8fafc; font-weight:700; }
+    details[open] summary { border-bottom:1px solid #e5e7eb; }
+    .body { display:grid; gap:8px; padding:10px; }
+    .issue-list { display:grid; gap:7px; max-height:520px; overflow:auto; }
+    .issue { border:1px solid #edf0f4; border-radius:7px; background:#fbfcff; padding:8px; display:grid; gap:7px; font-size:13px; }
+    .line { display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; }
+    .empty { color:var(--muted); font-size:13px; line-height:1.55; }
+    @media (max-width: 900px) { .summary { grid-template-columns:repeat(2,1fr); } .topbar { align-items:flex-start; flex-direction:column; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="mark">SSQ</span><span>回测区</span></div>
+    <nav class="nav" aria-label="功能导航">
+      <a class="link" href="./index.html">分析页</a>
+      <a class="link" href="./prediction.html">预测区</a>
+      <a class="link" href="./strategy.html">策略库</a>
+    </nav>
+  </header>
+  <main class="layout">
+    <section class="panel">
+      <h1>预测号回测</h1>
+      <div class="controls">
+        <label>最近期数 <input class="small-input" id="issueCount" type="number" min="1" value="20"></label>
+        <button class="button primary" id="runButton" type="button">刷新回测</button>
+      </div>
+    </section>
+    <section class="panel" id="predictionPanel"></section>
+    <section class="panel" id="resultPanel"></section>
+  </main>
+  <script src="../data/chart-data.js"></script>
+  <script src="../data/backtest-predictions.js"></script>
+  <script>
+    (() => {
+      const STORAGE_KEY = "ssq-analysis-portable-record";
+      const rows = window.SSQ_CHART_DATA?.rows || [];
+      const labels = { 1: "自选", 2: "机选1", 3: "机选2" };
+      const predictionPanel = document.getElementById("predictionPanel");
+      const resultPanel = document.getElementById("resultPanel");
+      const uniqueSorted = (items, max) => [...new Set((items || []).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= max))].sort((a, b) => a - b);
+      const normalizePick = (pick) => ({ red: uniqueSorted(pick?.red || [], 33).slice(0, 6), blue: uniqueSorted(pick?.blue || [], 16).slice(0, 1) });
+      const compactIssueKey = (issue) => {
+        const digits = String(issue || "").replace(/\D/g, "");
+        return digits.length > 5 && digits.startsWith("20") ? digits.slice(-5) : digits;
+      };
+      const ball = (n, color) => `<span class="ball ${color}">${String(n).padStart(2, "0")}</span>`;
+      const formatPick = (pick) => {
+        const { red, blue } = normalizePick(pick);
+        if (!red.length && !blue.length) return '<span class="empty">未输入</span>';
+        return `<span class="pick">${red.map((n) => ball(n, "red")).join("")}${blue.map((n) => ball(n, "blue")).join("")}</span>`;
+      };
+      const readPayload = () => {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); }
+        catch { return {}; }
+      };
+      const normalizeBacktestRecord = (record) => ({ ...normalizePick(record), source: record?.source || "历史预测" });
+      const readPicks = (payload) => {
+        const picks = { 1: { red: [], blue: [] }, 2: { red: [], blue: [] }, 3: { red: [], blue: [] }, ...(payload.picks || {}) };
+        for (let line = 1; line <= 3; line += 1) {
+          picks[line] = normalizePick(picks[line]);
+        }
+        return picks;
+      };
+      const activePredictions = (picks) => [1, 2, 3].map((line) => ({ line, label: labels[line], ...picks[line] })).filter((item) => item.red.length || item.blue.length);
+      const historicalPredictions = (payload) => {
+        const merged = { ...(window.SSQ_BACKTEST_PREDICTIONS || {}), ...(payload.savedBacktestPredictions || {}) };
+        return Object.fromEntries(Object.entries(merged).map(([issue, record]) => [compactIssueKey(issue), normalizeBacktestRecord(record)]).filter(([, record]) => record.red.length || record.blue.length));
+      };
+      const evaluate = (prediction, row) => {
+        const redSet = new Set(row.red.map(Number));
+        const blue = Number(row.blue);
+        const redHits = prediction.red.filter((n) => redSet.has(n));
+        const blueHits = prediction.blue.filter((n) => n === blue);
+        return { ...prediction, redHits, blueHits, totalHits: redHits.length + blueHits.length };
+      };
+      const buildResults = (currentPredictions, historyMap) => rows.map((row) => {
+        const history = historyMap[compactIssueKey(row.issue)];
+        const predictions = history ? [...currentPredictions, { label: history.source, ...history }] : currentPredictions;
+        const evaluations = predictions.map((prediction) => evaluate(prediction, row));
+        return {
+          issue: row.issue,
+          actual: { red: row.red.map(Number), blue: [Number(row.blue)] },
+          evaluations,
+          bestHits: evaluations.length ? Math.max(...evaluations.map((item) => item.totalHits)) : 0,
+          avgHits: (evaluations.reduce((sum, item) => sum + item.totalHits, 0) / (evaluations.length || 1)).toFixed(2)
+        };
+      }).filter((item) => item.evaluations.length);
+      const summarize = (items) => {
+        const all = items.flatMap((item) => item.evaluations);
+        const denominator = all.length || 1;
+        const redAvg = all.reduce((sum, item) => sum + item.redHits.length, 0) / denominator;
+        const blueAvg = all.reduce((sum, item) => sum + item.blueHits.length, 0) / denominator;
+        const avgHits = all.reduce((sum, item) => sum + item.totalHits, 0) / denominator;
+        const strong = items.filter((item) => item.evaluations.some((evaluation) => evaluation.totalHits >= 3)).length;
+        return {
+          issues: items.length,
+          redRate: `${(redAvg / 6 * 100).toFixed(1)}%`,
+          blueRate: `${(blueAvg * 100).toFixed(1)}%`,
+          redAvgHits: redAvg.toFixed(2),
+          blueAvgHits: blueAvg.toFixed(2),
+          avgHits: avgHits.toFixed(2),
+          strong
+        };
+      };
+      const renderSummary = (summary) => `<div class="summary"><div class="metric"><b>回测期数</b>${summary.issues}</div><div class="metric"><b>红球平均命中率</b><span class="metric-line"><span>${summary.redRate}</span><span class="metric-extra">平均${summary.redAvgHits}中</span></span></div><div class="metric"><b>蓝球平均命中率</b><span class="metric-line"><span>${summary.blueRate}</span><span class="metric-extra">平均${summary.blueAvgHits}中</span></span></div><div class="metric"><b>平均命中 / 高光期</b>${summary.avgHits} / ${summary.strong}</div></div>`;
+      const renderIssue = (item) => `<div class="issue"><div class="line"><b>${item.issue}期</b><span>平均 ${item.avgHits} 中，最佳 ${item.bestHits} 中</span></div>${item.evaluations.map((evaluation) => `<div class="line"><span>${evaluation.label}</span>${formatPick(evaluation)}<span>${evaluation.totalHits}中（红${evaluation.redHits.length} 蓝${evaluation.blueHits.length}）</span></div>`).join("")}<div class="line"><span>开奖号</span>${formatPick(item.actual)}</div></div>`;
+      const run = () => {
+        const payload = readPayload();
+        const picks = readPicks(payload);
+        const predictions = activePredictions(picks);
+        const historyMap = historicalPredictions(payload);
+        predictionPanel.innerHTML = `<h2>当前预测号</h2>${[1, 2, 3].map((line) => `<div class="line"><b>${labels[line]}</b>${formatPick(picks[line])}</div>`).join("")}`;
+        if (!predictions.length && !Object.keys(historyMap).length) {
+          resultPanel.innerHTML = '<h2>回测结果</h2><div class="empty">请先在预测区或策略库保存预测号。</div>';
+          return;
+        }
+        const results = buildResults(predictions, historyMap);
+        const count = Math.min(Math.max(Number(document.getElementById("issueCount").value) || 20, 1), results.length);
+        const selected = results.slice(-count);
+        resultPanel.innerHTML = `<h2>回测结果</h2><details open><summary><span>最近 ${count} 期</span><span>${selected.at(-1)?.issue || ""}</span></summary><div class="body">${renderSummary(summarize(selected))}<div class="issue-list">${selected.map(renderIssue).join("")}</div></div></details><details><summary><span>全部数据</span><span>${results.length} 期</span></summary><div class="body">${renderSummary(summarize(results))}<div class="issue-list">${results.map(renderIssue).join("")}</div></div></details>`;
+      };
+      document.getElementById("runButton").addEventListener("click", run);
+      run();
+    })();
+  </script>
+</body>
+</html>
+
+

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>双色球分析标注 正式版 v1.0</title>
+  <title>双色球分析标注 正式版 v2.0</title>
   <style>
     :root {
       --bg: #f5f6f8;
@@ -84,6 +84,64 @@
     .canvas-layer.select-mode { cursor: default; }
     .canvas-layer.hidden-layer { opacity: 0; pointer-events: none; }
     .text-box { position: absolute; z-index: 6; min-width: 120px; max-width: 360px; padding: 7px 9px; border: 1px solid #9ca3af; border-radius: 6px; outline: 2px solid rgba(21,94,239,.18); color: var(--text); background: rgba(255,255,255,.94); box-shadow: 0 6px 18px rgba(31,41,55,.18); resize: both; overflow: auto; }
+    .prediction-panel { width: 100%; max-width: 1546px; margin: 12px auto 0; padding: 12px; border: 1px solid var(--line); background: #fff; user-select: text; }
+    .prediction-grid { display: grid; gap: 12px; }
+    .feature-top-row { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr); gap: 12px; align-items: stretch; }
+    .prediction-section { border: 1px solid #d7dce3; border-radius: 8px; background: #fbfcff; padding: 10px; }
+    .feature-top-row > .prediction-section { min-height: 430px; height: 100%; }
+    .prediction-section h2, .prediction-section h3 { margin: 0 0 8px; font-size: 15px; line-height: 1.3; }
+    .prediction-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .prediction-controls label { display: inline-flex; align-items: center; gap: 6px; color: #374151; font-size: 13px; }
+    .prediction-input { width: 110px; min-height: 30px; border: 1px solid #cbd5e1; border-radius: 7px; padding: 5px 7px; background: #fff; color: #1f2937; }
+    .prediction-number-input { width: min(650px, 100%); min-height: 40px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 5px 8px; background: #fff; color: #1f2937; cursor: text; }
+    .prediction-number-input:focus { outline: 2px solid rgba(21,94,239,.18); border-color: #9bb7f0; }
+    .prediction-number-input.editing { color: #374151; font-variant-numeric: tabular-nums; }
+    .prediction-pending { display: inline-flex; align-items: center; min-width: 12px; min-height: 24px; color: #374151; font-weight: 700; }
+    .prediction-button { min-height: 30px; padding: 0 9px; border: 1px solid #b8cdfb; border-radius: 7px; color: #155eef; background: #edf4ff; cursor: pointer; }
+    .prediction-button:hover { background: #dbeafe; }
+    .prediction-button.secondary { border-color: #d7dce3; color: #374151; background: #fff; }
+    .prediction-button.danger { border-color: #fecaca; color: #b42318; background: #fff1f2; }
+    .prediction-line-list { display: grid; gap: 5px; margin: 6px 0; }
+    .prediction-line { display: grid; grid-template-columns: 64px 1fr; gap: 8px; align-items: center; min-height: 48px; padding: 5px 8px; border: 1px solid #e5e7eb; border-radius: 7px; background: #fff; }
+    .prediction-line strong { font-size: 13px; }
+    .prediction-empty { color: #6b7280; font-size: 13px; }
+    .prediction-balls { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    .strategy-dialog-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 18px; background: rgba(15,23,42,.38); }
+    .strategy-dialog { width: min(520px, 100%); border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; box-shadow: 0 20px 50px rgba(15,23,42,.26); padding: 14px; }
+    .strategy-dialog h3 { margin: 0 0 10px; font-size: 15px; }
+    .strategy-dialog-fields { display: grid; gap: 9px; }
+    .strategy-dialog label { display: grid; gap: 5px; color: #374151; font-size: 13px; font-weight: 700; }
+    .strategy-dialog input, .strategy-dialog textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 7px; padding: 7px 8px; color: #1f2937; background: #fff; font: inherit; }
+    .strategy-dialog textarea { min-height: 74px; resize: vertical; line-height: 1.45; }
+    .strategy-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    .strategy-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .strategy-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .strategy-action-group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .strategy-card { display: inline-flex; align-items: center; justify-content: center; width: 74px; height: 32px; padding: 0 8px; border: 1px solid #d7dce3; border-radius: 7px; background: #fff; color: #1f2937; font-weight: 700; font-size: 13px; cursor: pointer; white-space: nowrap; transition: border-color .15s ease, background .15s ease, color .15s ease, box-shadow .15s ease; }
+    .strategy-card.selected { border-color: #155eef; background: #155eef; color: #fff; box-shadow: 0 2px 8px rgba(21,94,239,.22); }
+    .model-result { display: grid; gap: 8px; margin-top: 8px; }
+    .model-pick-line { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+    .model-pick-actions { display: grid; gap: 6px; justify-items: end; margin-left: auto; }
+    .model-pick-action-row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .model-score-list { display: grid; gap: 5px; color: #374151; font-size: 12px; line-height: 1.45; }
+    .backtest-window-buttons { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .backtest-window-button { min-height: 30px; padding: 0 10px; border: 1px solid #d7dce3; border-radius: 7px; color: #374151; background: #fff; cursor: pointer; }
+    .backtest-window-button.selected { border-color: #155eef; color: #fff; background: #155eef; }
+    .backtest-grid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 6px; margin: 6px 0; }
+    .backtest-stat { border: 1px solid #e5e7eb; border-radius: 7px; padding: 6px; background: #f8fafc; font-size: 12px; }
+    .backtest-stat-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .backtest-stat-extra { margin-left: auto; font-weight: 700; color: #0f172a; white-space: nowrap; }
+    .backtest-panel { display: grid; gap: 8px; }
+    .backtest-details { border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; overflow: hidden; }
+    .backtest-details > summary { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; cursor: pointer; color: #1f2937; background: #f8fafc; font-weight: 700; }
+    .backtest-details[open] > summary { border-bottom: 1px solid #e5e7eb; }
+    .backtest-body { padding: 8px 10px; }
+    .backtest-list { display: grid; gap: 6px; max-height: 420px; overflow: auto; }
+    .backtest-issue { border: 1px solid #edf0f4; border-radius: 7px; background: #fbfcff; }
+    .backtest-issue > summary { padding: 7px 8px; cursor: pointer; font-size: 12px; font-weight: 700; }
+    .backtest-issue-body { display: grid; gap: 6px; padding: 0 8px 8px; font-size: 12px; }
+    .backtest-result-line { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+    @media (max-width: 1100px) { .feature-top-row { grid-template-columns: 1fr; } .feature-top-row > .prediction-section { min-height: 0; } }
     .hint { position: fixed; right: 16px; bottom: 14px; z-index: 8; max-width: 620px; padding: 9px 11px; color: #374151; background: rgba(255,255,255,.94); border: 1px solid rgba(215,220,227,.9); border-radius: 8px; font-size: 13px; box-shadow: 0 6px 18px rgba(31,41,55,.08); }
     .hidden-input { display: none; }
     @media (max-width: 1000px) { .status { margin-left: 0; text-align: left; } }
@@ -92,7 +150,7 @@
 <body>
   <main class="app">
     <section class="toolbar" aria-label="标注工具栏">
-      <div class="brand"><span class="brand-mark">SSQ</span><span>双色球分析标注</span><span class="version-badge" id="versionBadge">v1.0</span></div>
+      <div class="brand"><span class="brand-mark">SSQ</span><span>双色球分析标注</span><span class="version-badge" id="versionBadge">v2.0</span></div>
       <div class="group" role="group" aria-label="图表来源">
         <a class="action-button primary-link" href="https://datachart.500.com/ssq/" target="_blank" rel="noopener" title="打开500彩票网双色球图表"><svg class="icon" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><path d="M15 3h6v6"></path><path d="M10 14L21 3"></path></svg>打开源站</a>
         <button class="action-button" type="button" id="refreshChartButton" title="重新载入本地图表数据"><svg class="icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2"></path><path d="M3 12A9 9 0 0 1 18.5 5.8"></path><path d="M18 2v4h-4"></path><path d="M6 22v-4h4"></path></svg>刷新图表</button>
@@ -126,6 +184,7 @@
       <div class="chart-surface" id="chartSurface">
         <div class="chart-title">双色球红蓝走势图 <span class="chart-meta" id="chartMeta"></span></div>
         <div id="chartHost"></div>
+        <section class="prediction-panel" id="predictionPanel" aria-label="预测区"></section>
         <canvas class="canvas-layer hand-mode" id="drawCanvas" aria-label="标注绘图层"></canvas>
         <input class="hidden-input" id="recordInput" type="file" accept="application/json,.json">
       </div>
@@ -134,10 +193,11 @@
   </main>
   <script src="../data/latest-ssq.js"></script>
   <script src="../data/chart-data.js"></script>
+  <script src="../data/backtest-predictions.js"></script>
   <script>
     (() => {
-      const APP_VERSION = "v1.0";
-      const STORAGE_SCHEMA_VERSION = 7;
+      const APP_VERSION = "v2.0";
+      const STORAGE_SCHEMA_VERSION = 10;
       const STORAGE_KEY = "ssq-analysis-portable-record";
       const OLD_KEYS = ["ssq-analysis-annotations-v1", "ssq-analysis-annotations-v5", "ssq-analysis-annotations-v4", "ssq-analysis-annotations-v3", "ssq-analysis-annotations-v2"];
       const MARKER_STYLE = Object.freeze({ width: 3, defaultColor: "#79aee8" });
@@ -147,6 +207,7 @@
       const workspace = document.getElementById("workspace");
       const chartSurface = document.getElementById("chartSurface");
       const chartHost = document.getElementById("chartHost");
+      const predictionPanel = document.getElementById("predictionPanel");
       const chartMeta = document.getElementById("chartMeta");
       const canvas = document.getElementById("drawCanvas");
       const ctx = canvas.getContext("2d");
@@ -162,9 +223,17 @@
       const latestIssue = document.getElementById("latestIssue");
       const latestBalls = document.getElementById("latestBalls");
       const refreshLatestButton = document.getElementById("refreshLatestButton");
+      const saveRecordButton = document.getElementById("saveRecordButton");
+      const loadRecordButton = document.getElementById("loadRecordButton");
+      const recordInput = document.getElementById("recordInput");
       const toolButtons = Array.from(document.querySelectorAll(".tool-button"));
       let actions = [];
       let picks = { 1: { red: [], blue: [] }, 2: { red: [], blue: [] }, 3: { red: [], blue: [] } };
+      let predictionLines = { 1: { red: [], blue: [] }, 2: { red: [], blue: [] }, 3: { red: [], blue: [] } };
+      let predictionIssue = "";
+      let savedBacktestPredictions = {};
+      let backtestWindowSize = 20;
+      let lastModelFilledLine = null;
       let currentTool = "hand";
       let isDrawing = false;
       let startPoint = null;
@@ -187,6 +256,23 @@
       const getStyle = () => ({ color: strokeColor, width: MARKER_STYLE.width });
       const setStatus = (text) => { statusText.textContent = text; clearTimeout(statusText._timer); statusText._timer = setTimeout(() => { statusText.textContent = "自动保存已开启"; }, 1800); };
       const ballHtml = (number, color) => `<span class="ball ${color}">${String(number).padStart(2, "0")}</span>`;
+      const PICK_LINE_LABELS = Object.freeze({ 1: "自选", 2: "机选1", 3: "机选2" });
+      const DEFAULT_STRATEGIES = Object.freeze([
+        { id: "hot", mode: "hot", name: "热号延续", weight: 1.35, explain: "优先观察近期开奖中反复出现的红蓝球，认为短期惯性可能继续。", example: "示例：近20期内 08、24 多次出现，模型会提高它们的权重。" },
+        { id: "repeat", mode: "repeat", name: "重号跟随", weight: 0.95, explain: "参考上一期开奖号码，给少量重号机会，适合捕捉双色球常见的1到2个红球复现。", example: "示例：上期红球 12、24、30，本期模型会给这些号码小幅加分。" },
+        { id: "neighbor", mode: "neighbor", name: "邻号牵引", weight: 0.85, explain: "围绕上一期号码的前后相邻号加分，用来捕捉走势图里的斜连、贴边移动。", example: "示例：上期出现 18，则 17、19 会获得邻号分。" }
+      ]);
+      let strategyLibrary = DEFAULT_STRATEGIES.map((strategy) => ({ ...strategy }));
+      let selectedStrategyIds = strategyLibrary.map((strategy) => strategy.id);
+      const htmlEscape = (value) => String(value ?? "").replace(/[&<>"]/g, (char) => { if (char === "&") return "&amp;"; if (char === "<") return "&lt;"; if (char === ">") return "&gt;"; return "&quot;"; });
+      const uniqueSorted = (items, max) => [...new Set((items || []).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= max))].sort((a, b) => a - b);
+      const normalizePicks = () => {
+        for (let line = 1; line <= 3; line += 1) {
+          picks[line] = picks[line] || { red: [], blue: [] };
+          picks[line].red = uniqueSorted(picks[line].red, 33).slice(0, 6);
+          picks[line].blue = uniqueSorted(picks[line].blue, 16).slice(0, 1);
+        }
+      };
       const currentChartIssues = () => (window.SSQ_CHART_DATA?.rows || []).map((row) => String(row.issue));
       const buildHotRedMap = (rows) => {
         const redRows = rows.map((row) => new Set(row.red.map(Number)));
@@ -406,7 +492,394 @@
         html += '</tbody></table>';
         chartHost.innerHTML = html;
         showLatest();
+        renderPredictionPanel();
         setTimeout(() => { resizeCanvas(); drawBlueTrendLines(); }, 60);
+      };
+      const parsePredictionInput = (value) => {
+        const raw = String(value || "").trim();
+        const digits = raw.replace(/\D/g, "");
+        const numbers = raw && /^\d{14}$/.test(digits) ? digits.match(/\d{2}/g).map(Number) : (raw.match(/\d{1,2}/g) || []).map(Number);
+        const red = [];
+        for (const number of numbers.slice(0, 6)) {
+          if (number >= 1 && number <= 33 && !red.includes(number)) red.push(number);
+        }
+        const blueNumber = numbers[6];
+        const blue = blueNumber >= 1 && blueNumber <= 16 ? [blueNumber] : [];
+        return { red: red.sort((a, b) => a - b), blue };
+      };
+      const pickInputValue = (pick) => [...uniqueSorted(pick?.red || [], 33), ...uniqueSorted(pick?.blue || [], 16)].map((n) => String(n).padStart(2, "0")).join(" ");
+      const completePick = (pick) => uniqueSorted(pick?.red || [], 33).length === 6 && uniqueSorted(pick?.blue || [], 16).length === 1;
+      const normalizePredictionLines = () => {
+        for (let line = 1; line <= 3; line += 1) {
+          predictionLines[line] = predictionLines[line] || { red: [], blue: [] };
+          predictionLines[line].red = uniqueSorted(predictionLines[line].red, 33).slice(0, 6);
+          predictionLines[line].blue = uniqueSorted(predictionLines[line].blue, 16).slice(0, 1);
+        }
+      };
+      const nextPredictionIssue = () => {
+        const raw = String(window.SSQ_LATEST?.issue || window.SSQ_CHART_DATA?.rows?.at(-1)?.issue || "").replace(/\D/g, "");
+        const issue = Number(raw.length === 5 ? `20${raw}` : raw);
+        return Number.isFinite(issue) && issue > 0 ? String(issue + 1) : "";
+      };
+      const formatPick = (pick) => {
+        const red = uniqueSorted(pick?.red || [], 33);
+        const blue = uniqueSorted(pick?.blue || [], 16);
+        if (!red.length && !blue.length) return '<span class="prediction-empty">???</span>';
+        return `<span class="prediction-balls">${red.map((n) => ballHtml(n, "red")).join("")}${blue.map((n) => ballHtml(n, "blue")).join("")}</span>`;
+      };
+      const parsePredictionEditorText = (value) => {
+        const raw = String(value || "").replace(/\u00a0/g, " ").trimStart();
+        const parts = raw.includes(" ") ? raw.split(/\s+/).filter(Boolean) : raw.replace(/\D/g, "").split("");
+        const red = [];
+        const blue = [];
+        const pending = [];
+        parts.slice(0, 7).forEach((part, index) => {
+          const digits = part.replace(/\D/g, "").slice(0, 2);
+          if (!digits) return;
+          const number = Number(digits);
+          if (index < 6) {
+            if (number >= 1 && number <= 33 && !red.includes(number)) red.push(number);
+            else pending.push(digits);
+          } else if (number >= 1 && number <= 16) blue.push(number);
+          else pending.push(digits);
+        });
+        return { pick: { red: red.sort((a, b) => a - b), blue: blue.slice(0, 1) }, pending: pending.join(" ") };
+      };
+      const renderPickEditorContent = (pick, pending = "") => {
+        const red = uniqueSorted(pick?.red || [], 33);
+        const blue = uniqueSorted(pick?.blue || [], 16);
+        const balls = red.map((n) => ballHtml(n, "red")).join("") + blue.map((n) => ballHtml(n, "blue")).join("");
+        const tail = pending ? `<span class="prediction-pending">${htmlEscape(pending)}</span>` : "";
+        if (!balls && !tail) return '<span class="prediction-empty">输入号码</span>';
+        return balls + tail;
+      };
+      const placeCaretAtEnd = (element) => {
+        element.focus();
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.collapse(false);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      };
+      const syncPredictionLineDom = (line) => {
+        const editor = predictionPanel?.querySelector(`[data-prediction-line="${line}"]`);
+        if (!editor) return;
+        editor.classList.remove("editing");
+        editor.innerHTML = renderPickEditorContent(predictionLines[line]);
+      };
+      const topNumbersByScore = (scores, count) => scores
+        .sort((a, b) => b.score - a.score || a.number - b.number)
+        .slice(0, count)
+        .map((item) => item.number)
+        .sort((a, b) => a - b);
+      const buildNumberStats = (historyRows) => {
+        const redStats = Array.from({ length: 34 }, (_, number) => ({ number, freq: 0, recentFreq: 0, miss: historyRows.length, lastIndex: -1, score: 0, reasons: [] }));
+        const blueStats = Array.from({ length: 17 }, (_, number) => ({ number, freq: 0, recentFreq: 0, miss: historyRows.length, lastIndex: -1, score: 0, reasons: [] }));
+        const recentStart = Math.max(0, historyRows.length - 12);
+        historyRows.forEach((row, index) => {
+          row.red.map(Number).forEach((number) => {
+            if (!redStats[number]) return;
+            redStats[number].freq += 1;
+            if (index >= recentStart) redStats[number].recentFreq += 1;
+            redStats[number].lastIndex = index;
+          });
+          const blue = Number(row.blue);
+          if (blueStats[blue]) {
+            blueStats[blue].freq += 1;
+            if (index >= recentStart) blueStats[blue].recentFreq += 1;
+            blueStats[blue].lastIndex = index;
+          }
+        });
+        redStats.slice(1).forEach((item) => { item.miss = item.lastIndex < 0 ? historyRows.length : historyRows.length - item.lastIndex - 1; });
+        blueStats.slice(1).forEach((item) => { item.miss = item.lastIndex < 0 ? historyRows.length : historyRows.length - item.lastIndex - 1; });
+        return { redStats, blueStats };
+      };
+      const addScore = (item, value, reason) => {
+        item.score += value;
+        if (value > 0) item.reasons.push(`${reason}+${value.toFixed(1)}`);
+      };
+      const inferStrategyMode = (strategy) => {
+        if (strategy.mode) return strategy.mode;
+        const text = `${strategy.name || ""} ${strategy.explain || ""} ${strategy.example || ""}`;
+        if (/重号|复现|重复|上期.*开/.test(text)) return "repeat";
+        if (/邻号|相邻|前后|斜连|贴边|边号/.test(text)) return "neighbor";
+        if (/冷号|遗漏|回补|久未|补位/.test(text)) return "miss";
+        if (/分区|三区|一区|二区|三区|均衡|区间/.test(text)) return "zone";
+        if (/热号|高频|频繁|连热|近期.*多/.test(text)) return "hot";
+        return "hot";
+      };
+      const strategyLabel = (strategy) => {
+        const mode = inferStrategyMode(strategy);
+        return { hot: "热号模型", repeat: "重号模型", neighbor: "邻号模型", miss: "遗漏模型", zone: "分区模型" }[mode] || "热号模型";
+      };
+      const applyStrategyMode = (mode, strategy, historyRows, redStats, blueStats) => {
+        const latest = historyRows.at(-1);
+        const weight = Number(strategy.weight) || 1;
+        const label = strategy.name?.trim() || strategyLabel(strategy);
+        if (mode === "hot") {
+          redStats.slice(1).forEach((item) => addScore(item, (item.recentFreq * 2.4 + item.freq * 0.35) * weight, label));
+          blueStats.slice(1).forEach((item) => addScore(item, (item.recentFreq * 2.1 + item.freq * 0.25) * weight, label));
+        }
+        if (mode === "miss") {
+          redStats.slice(1).forEach((item) => addScore(item, Math.min(item.miss, 18) * 0.42 * weight, label));
+          blueStats.slice(1).forEach((item) => addScore(item, Math.min(item.miss, 12) * 0.55 * weight, label));
+        }
+        if (latest && mode === "repeat") {
+          latest.red.map(Number).forEach((number) => redStats[number] && addScore(redStats[number], 4.2 * weight, label));
+          if (blueStats[Number(latest.blue)]) addScore(blueStats[Number(latest.blue)], 2.4 * weight, label);
+        }
+        if (latest && mode === "neighbor") {
+          latest.red.map(Number).forEach((number) => [number - 1, number + 1].forEach((near) => {
+            if (redStats[near]) addScore(redStats[near], 3.3 * weight, label);
+          }));
+          [Number(latest.blue) - 1, Number(latest.blue) + 1].forEach((near) => {
+            if (blueStats[near]) addScore(blueStats[near], 2.2 * weight, label);
+          });
+        }
+        if (mode === "zone") {
+              const zoneHits = [0, 0, 0];
+          historyRows.slice(-12).forEach((row) => row.red.map(Number).forEach((number) => { zoneHits[redZone(number)] += 1; }));
+          const maxZone = Math.max(...zoneHits);
+          redStats.slice(1).forEach((item) => addScore(item, (maxZone - zoneHits[redZone(item.number)] + 1) * 0.7 * weight, label));
+        }
+      };
+      const applyStrategyScores = (historyRows, redStats, blueStats, strategyIds) => {
+        const activeStrategies = strategyLibrary.filter((strategy) => strategyIds.includes(strategy.id));
+        activeStrategies.forEach((strategy) => applyStrategyMode(inferStrategyMode(strategy), strategy, historyRows, redStats, blueStats));
+      };
+      const buildModelPick = () => {
+        const rows = window.SSQ_CHART_DATA?.rows || [];
+        if (!selectedStrategyIds.length || rows.length < 5) return null;
+        const { redStats, blueStats } = buildNumberStats(rows);
+        applyStrategyScores(rows, redStats, blueStats, selectedStrategyIds);
+        const red = topNumbersByScore(redStats.slice(1), 6);
+        const blue = topNumbersByScore(blueStats.slice(1), 1);
+        return { red, blue, redStats, blueStats };
+      };
+      const scoreSummary = (stats, selected) => selected.map((number) => {
+        const item = stats[number];
+        const reasons = item?.reasons?.slice(0, 3).join("、") || "基础分";
+        return `${String(number).padStart(2, "0")}：${item.score.toFixed(1)}分（${reasons}）`;
+      });
+      const fillModelPredictionToPickLine = () => {
+        const modelPick = buildModelPick();
+        if (!modelPick) { setStatus("暂无可填入的模型预测"); return; }
+        picks[2] = { red: [...modelPick.red], blue: [...modelPick.blue] };
+        syncPickLineDom(2);
+        scheduleSave();
+        setStatus("模型预测已填入图表预选2");
+      };
+      const clearLastModelPick = () => {
+        picks[2] = { red: [], blue: [] };
+        syncPickLineDom(2);
+        scheduleSave();
+        setStatus("图表预选2已清除");
+      };
+      const updatePredictionLineFromInput = (input) => {
+        const line = Number(input.dataset.predictionLine);
+        if (!predictionLines[line]) return null;
+        predictionLines[line] = parsePredictionInput(input.value ?? input.textContent);
+        scheduleSave();
+        setStatus(`${PICK_LINE_LABELS[line]}已更新`);
+        return predictionLines[line];
+      };
+      const startPredictionLineEdit = (editor) => {
+        const line = Number(editor.dataset.predictionLine);
+        editor.classList.add("editing");
+        if (editor.querySelector(".ball, .prediction-empty")) editor.textContent = pickInputValue(predictionLines[line]);
+        placeCaretAtEnd(editor);
+      };
+      const renderPredictionLineAsBalls = (editor) => {
+        updatePredictionLineFromInput(editor);
+        syncPredictionLineDom(Number(editor.dataset.predictionLine));
+      };
+      const saveModelPredictionForBacktest = () => {
+        const modelPick = buildModelPick();
+        const issue = document.getElementById("predictionIssue")?.value?.trim() || predictionIssue || nextPredictionIssue();
+        if (!modelPick || !issue) { setStatus("暂无可保存的模型预测"); return; }
+        predictionIssue = issue;
+        savedBacktestPredictions[issue] = { red: [...modelPick.red], blue: [...modelPick.blue], source: "本期预测模型", savedAt: new Date().toISOString() };
+        renderPredictionPanel();
+        scheduleSave();
+        setStatus(`${issue}期模型预测已保存到回测区`);
+      };
+      const renderPredictionModel = () => {
+        const activeNames = strategyLibrary.filter((strategy) => selectedStrategyIds.includes(strategy.id)).map((strategy) => strategy.name).join("、") || "未选择策略";
+        if (!selectedStrategyIds.length) return `<div class="model-result"><div class="prediction-empty">当前使用：${activeNames}</div><div class="model-pick-line"><span>模型预测</span><span class="prediction-empty">未选择策略</span></div></div>`;
+        const modelPick = buildModelPick();
+        if (!modelPick) return '<div class="prediction-empty">本地开奖数据不足，暂时无法生成本期预测模型。</div>';
+        return `<div class="model-result"><div class="prediction-empty">当前使用：${activeNames}</div><div class="model-pick-line"><span>模型预测</span>${formatPick(modelPick)}<div class="model-pick-actions"><div class="model-pick-action-row"><button class="prediction-button secondary" type="button" data-action="fill-model-pick">填入预选</button><button class="prediction-button secondary" type="button" data-action="clear-prediction">清除</button></div><div class="model-pick-action-row"><button class="prediction-button" type="button" data-action="save-model-backtest">保存</button></div></div></div><div class="model-score-list"><div><strong>红球依据</strong><br>${scoreSummary(modelPick.redStats, modelPick.red).join("<br>")}</div><div><strong>蓝球依据</strong><br>${scoreSummary(modelPick.blueStats, modelPick.blue).join("<br>")}</div></div></div>`;
+      };
+      const renderManualPredictionPanel = () => `<section class="prediction-section"><h2>预测区</h2><div class="prediction-controls"><label>预测期号 <input class="prediction-input" id="predictionIssue" value="${htmlEscape(predictionIssue)}"></label></div><div class="prediction-line-list">${[1,2,3].map((line) => `<div class="prediction-line"><strong>${PICK_LINE_LABELS[line]}</strong><div class="prediction-number-input" data-prediction-line="${line}" contenteditable="true" role="textbox" aria-label="${PICK_LINE_LABELS[line]}号码">${renderPickEditorContent(predictionLines[line])}</div></div>`).join("")}</div><h3>本期预测模型</h3>${renderPredictionModel()}</section>`;
+      const closeStrategyDialog = () => document.querySelector(".strategy-dialog-backdrop")?.remove();
+      const saveStrategy = ({ id, name, explain, example }) => {
+        const payload = { name: name.trim() || "新策略", explain: explain.trim(), example: example.trim() };
+        if (id) {
+          const index = strategyLibrary.findIndex((strategy) => strategy.id === id);
+          if (index >= 0) strategyLibrary[index] = { ...strategyLibrary[index], ...payload };
+          setStatus("已修改策略");
+        } else {
+          const nextId = `custom-${Date.now().toString(36)}`;
+          strategyLibrary.push({ id: nextId, weight: 1, ...payload });
+          selectedStrategyIds.push(nextId);
+          setStatus("已新增策略");
+        }
+        renderPredictionPanel();
+        scheduleSave();
+      };
+      const openStrategyDialog = (id = null) => {
+        closeStrategyDialog();
+        const strategy = id ? strategyLibrary.find((item) => item.id === id) : null;
+        const backdrop = document.createElement("div");
+        backdrop.className = "strategy-dialog-backdrop";
+        backdrop.innerHTML = `<div class="strategy-dialog" role="dialog" aria-modal="true" aria-labelledby="strategyDialogTitle"><h3 id="strategyDialogTitle">${strategy ? "修改策略" : "新策略"}</h3><div class="strategy-dialog-fields"><label>策略名称<input data-strategy-dialog-field="name" placeholder="例如：热号延续" value="${htmlEscape(strategy?.name || "")}"></label><label>解释<textarea data-strategy-dialog-field="explain" placeholder="写清楚这个策略为什么会影响选号">${htmlEscape(strategy?.explain || "")}</textarea></label><label>示例<textarea data-strategy-dialog-field="example" placeholder="举一个使用这个策略的号码示例">${htmlEscape(strategy?.example || "")}</textarea></label></div><div class="strategy-dialog-actions"><button class="prediction-button secondary" type="button" data-strategy-dialog="cancel">取消</button><button class="prediction-button" type="button" data-strategy-dialog="save">保存</button></div></div>`;
+        document.body.appendChild(backdrop);
+        const nameInput = backdrop.querySelector('[data-strategy-dialog-field="name"]');
+        const explainInput = backdrop.querySelector('[data-strategy-dialog-field="explain"]');
+        const exampleInput = backdrop.querySelector('[data-strategy-dialog-field="example"]');
+        const saveDialog = () => {
+          saveStrategy({ id, name: nameInput.value, explain: explainInput.value, example: exampleInput.value });
+          closeStrategyDialog();
+        };
+        backdrop.addEventListener("click", (event) => { if (event.target === backdrop || event.target.closest('[data-strategy-dialog="cancel"]')) closeStrategyDialog(); if (event.target.closest('[data-strategy-dialog="save"]')) saveDialog(); });
+        backdrop.addEventListener("keydown", (event) => { if (event.key === "Escape") closeStrategyDialog(); if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) saveDialog(); });
+        nameInput.focus();
+      };
+      const removeStrategy = (id) => {
+        if (DEFAULT_STRATEGIES.some((strategy) => strategy.id === id)) return setStatus("????????");
+        strategyLibrary = strategyLibrary.filter((strategy) => strategy.id !== id);
+        selectedStrategyIds = selectedStrategyIds.filter((item) => item !== id);
+        renderPredictionPanel();
+        scheduleSave();
+        setStatus("?????");
+      };
+      const currentSelectedStrategy = () => [...selectedStrategyIds].reverse().map((id) => strategyLibrary.find((strategy) => strategy.id === id)).find(Boolean) || null;
+      const editSelectedStrategy = () => {
+        const strategy = currentSelectedStrategy();
+        if (!strategy) return setStatus("请先选择策略");
+        openStrategyDialog(strategy.id);
+      };
+      const removeSelectedStrategy = () => {
+        const strategy = currentSelectedStrategy();
+        if (!strategy) return setStatus("请先选择策略");
+        removeStrategy(strategy.id);
+      };
+      const toggleStrategySelection = (id) => {
+        if (!id) return;
+        if (selectedStrategyIds.includes(id)) selectedStrategyIds = selectedStrategyIds.filter((item) => item !== id);
+        else selectedStrategyIds.push(id);
+        renderPredictionPanel();
+        scheduleSave();
+        setStatus("???????");
+      };
+      const selectAllStrategies = () => {
+        selectedStrategyIds = strategyLibrary.map((strategy) => strategy.id);
+        renderPredictionPanel();
+        scheduleSave();
+        setStatus("已全选策略");
+      };
+      const clearSelectedStrategies = () => {
+        selectedStrategyIds = [];
+        renderPredictionPanel();
+        scheduleSave();
+        setStatus("已清除策略选择");
+      };
+      const renderStrategyLibraryPanel = () => `<section class="prediction-section"><h2>策略库</h2><div class="strategy-actions"><div class="strategy-action-group"><button class="prediction-button" type="button" data-action="add-strategy">新增</button><button class="prediction-button secondary" type="button" data-action="delete-selected-strategy">删除</button><button class="prediction-button secondary" type="button" data-action="edit-selected-strategy">修改</button></div><div class="strategy-action-group"><button class="prediction-button secondary" type="button" data-action="select-all-strategies">全选</button><button class="prediction-button secondary" type="button" data-action="clear-selected-strategies">清除</button></div></div><div class="strategy-list">${strategyLibrary.map((strategy) => { const selected = selectedStrategyIds.includes(strategy.id); const detail = `${strategy.explain || "暂无解释"}${strategy.example ? `\n${strategy.example}` : ""}`; return `<button class="strategy-card ${selected ? "selected" : ""}" type="button" data-strategy-id="${strategy.id}" title="${htmlEscape(detail)}">${htmlEscape(strategy.name || "新策略")}</button>`; }).join("")}</div></section>`;
+      const normalizeBacktestRecord = (record) => ({
+        red: uniqueSorted(record?.red || [], 33).slice(0, 6),
+        blue: uniqueSorted(record?.blue || [], 16).slice(0, 1),
+        source: record?.source || "已保存预测",
+        savedAt: record?.savedAt || ""
+      });
+      const backtestPredictionMap = () => {
+        const merged = { ...(window.SSQ_BACKTEST_PREDICTIONS || {}), ...savedBacktestPredictions };
+        return Object.fromEntries(Object.entries(merged).map(([issue, record]) => [String(issue), normalizeBacktestRecord(record)]).filter(([, record]) => record.red.length || record.blue.length));
+      };
+      const evaluateBacktestPick = (pick, row) => {
+        const redSet = new Set(row.red.map(Number));
+        const blueNumber = Number(row.blue);
+        const redHits = pick.red.filter((number) => redSet.has(number));
+        const blueHits = pick.blue.filter((number) => number === blueNumber);
+        return { redHits, blueHits, totalHits: redHits.length + blueHits.length };
+      };
+      const percentText = (value) => `${(value * 100).toFixed(1)}%`;
+      const summarizeBacktestResults = (results) => {
+        const denominator = results.length || 1;
+        const avgRedHits = results.reduce((sum, item) => sum + item.redHits.length, 0) / denominator;
+        const avgBlueHits = results.reduce((sum, item) => sum + item.blueHits.length, 0) / denominator;
+        const avgTotalHits = results.reduce((sum, item) => sum + item.totalHits, 0) / denominator;
+        const strongIssues = results.filter((item) => item.totalHits >= 3).length;
+        return { issueCount: results.length, redHitRate: percentText(avgRedHits / 6), blueHitRate: percentText(avgBlueHits), redAvgHits: avgRedHits.toFixed(2), blueAvgHits: avgBlueHits.toFixed(2), avgTotalHits: avgTotalHits.toFixed(2), strongIssues };
+      };
+      const renderBacktestStats = (summary) => `<div class="backtest-grid"><div class="backtest-stat"><strong>回测期数</strong><br>${summary.issueCount}</div><div class="backtest-stat"><strong>红球平均命中率</strong><br><span class="backtest-stat-line"><span>${summary.redHitRate}</span><span class="backtest-stat-extra">平均${summary.redAvgHits}中</span></span></div><div class="backtest-stat"><strong>蓝球平均命中率</strong><br><span class="backtest-stat-line"><span>${summary.blueHitRate}</span><span class="backtest-stat-extra">平均${summary.blueAvgHits}中</span></span></div><div class="backtest-stat"><strong>平均每期/高光期</strong><br>${summary.avgTotalHits} / ${summary.strongIssues}</div></div>`;
+      const renderBacktestIssue = (item, open = false) => {
+        const hasPrediction = item.prediction?.red?.length || item.prediction?.blue?.length;
+        const summaryText = item.isOpened ? `${item.issue}期：${item.totalHits}中（红${item.redHits.length} 蓝${item.blueHits.length}）` : `${item.issue}期：待开奖`;
+        const actualLine = item.isOpened ? formatPick({ red: item.actual.red, blue: [item.actual.blue] }) : '<span class="prediction-empty">待开奖</span>';
+        const predictionLine = hasPrediction ? formatPick(item.prediction) : '<span class="prediction-empty">空</span>';
+        const analysisText = item.isOpened ? `<span>${item.totalHits}中</span>` : '<span class="prediction-empty">待开奖后分析</span>';
+        return `<details class="backtest-issue" ${open ? "open" : ""}><summary>${summaryText}</summary><div class="backtest-issue-body"><div class="backtest-result-line"><span>开奖号</span>${actualLine}</div><div class="backtest-result-line"><span>预测号</span>${predictionLine}${analysisText}</div></div></details>`;
+      };
+      const compactIssueKey = (issue) => {
+        const digits = String(issue || "").replace(/\D/g, "");
+        return digits.length > 5 && digits.startsWith("20") ? digits.slice(-5) : digits;
+      };
+      const isSameIssue = (a, b) => compactIssueKey(a) && compactIssueKey(a) === compactIssueKey(b);
+      const isSamePick = (a, b) => {
+        const redA = uniqueSorted(a?.red || [], 33).join(",");
+        const redB = uniqueSorted(b?.red || [], 33).join(",");
+        const blueA = uniqueSorted(a?.blue || [], 16).join(",");
+        const blueB = uniqueSorted(b?.blue || [], 16).join(",");
+        return redA === redB && blueA === blueB && Boolean(redA || blueA);
+      };
+      const currentModelBacktestState = () => {
+        const issue = document.getElementById("predictionIssue")?.value?.trim() || predictionIssue || nextPredictionIssue();
+        if (!issue) return null;
+        const savedEntry = Object.keys(savedBacktestPredictions || {}).find((key) => isSameIssue(key, issue));
+        const savedPick = savedEntry ? savedBacktestPredictions[savedEntry] : null;
+        const modelPick = buildModelPick();
+        const showSavedPick = savedEntry && modelPick && isSamePick(savedPick, modelPick);
+        return { issue: savedEntry || issue, isSaved: Boolean(savedEntry), pick: showSavedPick ? { red: [...modelPick.red], blue: [...modelPick.blue] } : { red: [], blue: [] } };
+      };
+      const buildBacktestResults = () => {
+        const predictionMap = backtestPredictionMap();
+        const currentModelState = currentModelBacktestState();
+        const rowsByIssue = new Map();
+        (window.SSQ_CHART_DATA?.rows || []).forEach((row) => {
+          rowsByIssue.set(String(row.issue), row);
+          rowsByIssue.set(compactIssueKey(row.issue), row);
+        });
+        if (currentModelState && !rowsByIssue.has(compactIssueKey(currentModelState.issue)) && !Object.keys(predictionMap).some((issue) => isSameIssue(issue, currentModelState.issue))) {
+          predictionMap[currentModelState.issue] = { red: [], blue: [], source: "本期预测模型", savedAt: "" };
+        }
+        return Object.entries(predictionMap).map(([issue, prediction]) => {
+          const row = rowsByIssue.get(String(issue)) || rowsByIssue.get(compactIssueKey(issue));
+          const isCurrentPendingIssue = currentModelState && isSameIssue(issue, currentModelState.issue) && !row;
+          const displayedPrediction = isCurrentPendingIssue ? currentModelState.pick : prediction;
+          if (!row) return { issue, actual: null, prediction: displayedPrediction, source: prediction.source, isOpened: false, redHits: [], blueHits: [], totalHits: 0 };
+          const actual = { red: row.red.map(Number), blue: Number(row.blue) };
+          return { issue: row.issue, actual, prediction, source: prediction.source, isOpened: true, ...evaluateBacktestPick(prediction, row) };
+        }).sort((a, b) => Number(compactIssueKey(a.issue)) - Number(compactIssueKey(b.issue)));
+      };
+      const renderBacktestPanel = () => {
+        const allResults = buildBacktestResults();
+        const openedResults = allResults.filter((item) => item.isOpened);
+        const pendingResults = allResults.filter((item) => !item.isOpened);
+        const controls = `<div class="prediction-controls"><span>回测期数</span><div class="backtest-window-buttons">${[5, 10, 15, 20].map((count) => `<button class="backtest-window-button ${backtestWindowSize === count ? "selected" : ""}" type="button" data-backtest-window="${count}">${count}期</button>`).join("")}</div></div>`;
+        if (!allResults.length) return `<section class="prediction-section"><h2>回测区</h2>${controls}<div class="prediction-empty">请先保存本期模型预测，或导入历史预测记录。</div></section>`;
+        const selectedOpenedResults = openedResults.slice(-Math.min(backtestWindowSize, openedResults.length));
+        const selectedResults = [...selectedOpenedResults, ...pendingResults];
+        const selectedSummary = summarizeBacktestResults(selectedOpenedResults);
+        const allSummary = summarizeBacktestResults(openedResults);
+        const selectedTitleCount = Math.min(backtestWindowSize, openedResults.length);
+        return `<section class="prediction-section"><h2>回测区</h2>${controls}<div class="backtest-panel"><details class="backtest-details" open><summary><span>最近${selectedTitleCount}期回测</span><span>平均${selectedSummary.avgTotalHits}中</span></summary><div class="backtest-body">${renderBacktestStats(selectedSummary)}<div class="backtest-list">${selectedResults.map((item, index) => renderBacktestIssue(item, index === selectedResults.length - 1)).join("")}</div></div></details><details class="backtest-details"><summary><span>全部已保存预测</span><span>${allResults.length}期</span></summary><div class="backtest-body">${renderBacktestStats(allSummary)}<div class="backtest-list">${allResults.map((item) => renderBacktestIssue(item)).join("")}</div></div></details></div></section>`;
+      };
+      const renderPredictionPanel = () => {
+        if (!predictionPanel) return;
+        normalizePredictionLines();
+        if (!predictionIssue) predictionIssue = nextPredictionIssue();
+        predictionPanel.innerHTML = `<div class="prediction-grid"><div class="feature-top-row">${renderManualPredictionPanel()}${renderStrategyLibraryPanel()}</div>${renderBacktestPanel()}</div>`;
       };
       const chartOffset = () => { const surfaceRect = chartSurface.getBoundingClientRect(); const hostRect = chartHost.getBoundingClientRect(); return { x: hostRect.left - surfaceRect.left, y: hostRect.top - surfaceRect.top }; };
       const getPoint = (event) => { const rect = chartHost.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; };
@@ -552,7 +1025,13 @@
         savedAt: new Date().toISOString(),
         chartIssues: currentChartIssues(),
         actions,
-        picks
+        picks,
+        predictionLines,
+        strategyLibrary,
+        selectedStrategyIds,
+        predictionIssue,
+        savedBacktestPredictions,
+        backtestWindowSize
       });
       const persistPortableRecord = async (payload) => {
         if (!isLocalServer()) return false;
@@ -578,6 +1057,18 @@
       const applyRecordPayload = (payload) => {
         if (Array.isArray(payload.actions)) actions = payload.actions;
         if (payload.picks) picks = { ...picks, ...payload.picks };
+        normalizePicks();
+        if (payload.predictionLines) predictionLines = { ...predictionLines, ...payload.predictionLines };
+        normalizePredictionLines();
+        if (Array.isArray(payload.strategyLibrary)) {
+          const savedDefault = new Map(payload.strategyLibrary.filter((strategy) => DEFAULT_STRATEGIES.some((item) => item.id === strategy.id)).map((strategy) => [strategy.id, strategy]));
+          const savedCustom = payload.strategyLibrary.filter((strategy) => !DEFAULT_STRATEGIES.some((item) => item.id === strategy.id));
+          strategyLibrary = [...DEFAULT_STRATEGIES.map((strategy) => ({ ...strategy, ...(savedDefault.get(strategy.id) || {}) })), ...savedCustom];
+        }
+        selectedStrategyIds = Array.isArray(payload.selectedStrategyIds) ? payload.selectedStrategyIds.filter((id) => strategyLibrary.some((strategy) => strategy.id === id)) : selectedStrategyIds;
+        predictionIssue = typeof payload.predictionIssue === "string" ? payload.predictionIssue : "";
+        savedBacktestPredictions = payload.savedBacktestPredictions && typeof payload.savedBacktestPredictions === "object" ? payload.savedBacktestPredictions : {};
+        backtestWindowSize = [5, 10, 15, 20].includes(Number(payload.backtestWindowSize)) ? Number(payload.backtestWindowSize) : 20;
         loadedCoordinateSpace = payload.coordinateSpace || "surface";
         loadedChartIssues = Array.isArray(payload.chartIssues) ? payload.chartIssues.map(String) : null;
       };
@@ -588,7 +1079,10 @@
       const hasRecordContent = (payload) => {
         const hasActions = Array.isArray(payload?.actions) && payload.actions.length > 0;
         const hasPicks = Object.values(payload?.picks || {}).some((group) => ["red", "blue"].some((color) => Array.isArray(group?.[color]) && group[color].length > 0));
-        return hasActions || hasPicks;
+        const hasPredictionLines = Object.values(payload?.predictionLines || {}).some((group) => ["red", "blue"].some((color) => Array.isArray(group?.[color]) && group[color].length > 0));
+        const hasCustomStrategies = Array.isArray(payload?.strategyLibrary) && payload.strategyLibrary.length > DEFAULT_STRATEGIES.length;
+        const hasBacktestPredictions = payload?.savedBacktestPredictions && Object.keys(payload.savedBacktestPredictions).length > 0;
+        return hasActions || hasPicks || hasPredictionLines || hasCustomStrategies || hasBacktestPredictions;
       };
       const recordTime = (payload) => {
         const time = payload?.savedAt ? Date.parse(payload.savedAt) : 0;
@@ -759,6 +1253,13 @@
         cell.classList.toggle("pick-selected", selected);
         cell.innerHTML = selected ? `<span class="hit ${color}">${String(number).padStart(2, "0")}</span>` : number;
       };
+      const syncPickLineDom = (line) => {
+        chartHost.querySelectorAll(`[data-pick-line="${line}"]`).forEach((cell) => {
+          const color = cell.dataset.pickColor;
+          const number = Number(cell.dataset.pickNumber);
+          setPickCellDisplay(cell, picks[line]?.[color]?.includes(number));
+        });
+      };
       const togglePickCell = (cell) => {
         const line = Number(cell.dataset.pickLine);
         const color = cell.dataset.pickColor;
@@ -766,12 +1267,14 @@
         const list = picks[line][color];
         const index = list.indexOf(number);
         const selected = index < 0;
+        const limit = color === "red" ? 6 : 1;
+        if (selected && list.length >= limit) { setStatus(`${PICK_LINE_LABELS[line]}最多选择${limit}个${color === "red" ? "红球" : "蓝球"}`); return; }
         if (selected) list.push(number);
         else list.splice(index, 1);
         list.sort((a, b) => a - b);
         setPickCellDisplay(cell, selected);
         scheduleSave();
-        setStatus(`预选${line}已更新`);
+        setStatus(`图表预选${line}已更新`);
       };
       const restoreRecordPayload = (payload) => {
         applyRecordPayload(payload);
@@ -878,6 +1381,48 @@
         if (key === "s") { event.preventDefault(); save(); }
       };
       const bindEvents = () => {
+        predictionPanel.addEventListener("click", (event) => {
+          const addStrategyButton = event.target.closest('[data-action="add-strategy"]');
+          if (addStrategyButton) openStrategyDialog();
+          const editStrategyButton = event.target.closest('[data-action="edit-selected-strategy"]');
+          if (editStrategyButton) { editSelectedStrategy(); return; }
+          const deleteStrategyButton = event.target.closest('[data-action="delete-selected-strategy"]');
+          if (deleteStrategyButton) { removeSelectedStrategy(); return; }
+          const selectAllStrategyButton = event.target.closest('[data-action="select-all-strategies"]');
+          if (selectAllStrategyButton) { selectAllStrategies(); return; }
+          const clearSelectedStrategyButton = event.target.closest('[data-action="clear-selected-strategies"]');
+          if (clearSelectedStrategyButton) { clearSelectedStrategies(); return; }
+          const fillModelButton = event.target.closest('[data-action="fill-model-pick"]');
+          if (fillModelButton) fillModelPredictionToPickLine();
+          const clearPredictionButton = event.target.closest('[data-action="clear-prediction"]');
+          if (clearPredictionButton) clearLastModelPick();
+          const saveModelButton = event.target.closest('[data-action="save-model-backtest"]');
+          if (saveModelButton) saveModelPredictionForBacktest();
+          const backtestWindowButton = event.target.closest("button[data-backtest-window]");
+          if (backtestWindowButton) { backtestWindowSize = Number(backtestWindowButton.dataset.backtestWindow) || 20; renderPredictionPanel(); scheduleSave(); return; }
+          const strategyToggle = event.target.closest('button[data-strategy-id]');
+          if (strategyToggle) toggleStrategySelection(strategyToggle.dataset.strategyId);
+        });
+        predictionPanel.addEventListener("focusin", (event) => {
+          const editor = event.target.closest("[data-prediction-line]");
+          if (editor) startPredictionLineEdit(editor);
+        });
+        predictionPanel.addEventListener("focusout", (event) => {
+          const editor = event.target.closest("[data-prediction-line]");
+          if (editor && !editor.classList.contains("editing")) renderPredictionLineAsBalls(editor);
+        });
+        predictionPanel.addEventListener("keydown", (event) => {
+          const editor = event.target.closest("[data-prediction-line]");
+          if (editor && event.key === "Enter") {
+            event.preventDefault();
+            renderPredictionLineAsBalls(editor);
+          }
+        });
+        predictionPanel.addEventListener("input", (event) => {
+          const input = event.target.closest("[data-prediction-line]");
+          if (input) return;
+          if (event.target.id === "predictionIssue") { predictionIssue = event.target.value.trim(); scheduleSave(); }
+        });
         chartHost.addEventListener("click", (event) => {
           const cell = event.target.closest("[data-pick-line]");
           if (cell) togglePickCell(cell);
