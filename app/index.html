@@ -74,6 +74,8 @@
     .latest-row td { background: #fffdf2; }
     .latest-row td.issue-col { color: #b42318; background: #fff7ed; }
     .pick-row td { background: #fbfcff; }
+    .pick-action-button { position: absolute; z-index: 7; min-height: 24px; padding: 0 6px; border: 1px solid #cbd5e1; border-radius: 6px; color: #2563eb; background: #fff; font-size: 12px; line-height: 1; white-space: nowrap; writing-mode: horizontal-tb; cursor: pointer; box-shadow: 0 2px 8px rgba(15,23,42,.08); }
+    .pick-action-button:hover { background: #eef4ff; }
     .pick-row td.issue-col { color: #2563eb; background: #eef4ff; }
     .pick-cell { color: #c5ccd6; cursor: pointer; }
     .pick-cell:hover { background: #eef4ff; }
@@ -244,7 +246,10 @@
       let currentPath = null;
       let previewPoint = null;
       let resizeTimer = 0;
+      let pickActionPositionTimer = 0;
       let saveTimer = 0;
+      let saveInFlight = false;
+      let savePending = false;
       let annotationsVisible = true;
       let loadedCoordinateSpace = "chartHost";
       let loadedChartIssues = null;
@@ -470,7 +475,7 @@
         redMiss = Array(34).fill(0); blueMiss = Array(17).fill(0);
         const hotRedMap = buildHotRedMap(rows);
         chartMeta.textContent = `最近 ${rows.length} 期，生成时间：${window.SSQ_CHART_DATA.generatedAt || "未知"}`;
-        let html = '<table class="chart-table"><thead><tr><th class="issue-col">期号</th>';
+        let html = '<table class="chart-table"><thead><tr><th class="issue-col">\u671f\u53f7</th>';
         for (let n = 1; n <= 33; n++) html += `<th>${n}</th>`;
         html += '<th class="sep"></th>';
         for (let n = 1; n <= 16; n++) html += `<th>${n}</th>`;
@@ -492,7 +497,7 @@
           html += '</tr>';
         });
                 for (let line = 1; line <= 3; line++) {
-          html += `<tr class="pick-row"><td class="issue-col">预选${line}</td>`;
+          html += `<tr class="pick-row"><td class="issue-col">\u9884\u9009${line}</td>`;
           for (let n = 1; n <= 33; n++) {
             const selected = picks[line].red.includes(n);
             html += `<td class="pick-cell ${selected ? 'pick-selected' : ''}" data-pick-line="${line}" data-pick-color="red" data-pick-number="${n}">${selected ? `<span class="hit red">${String(n).padStart(2, "0")}</span>` : n}</td>`;
@@ -506,9 +511,52 @@
         }
         html += '</tbody></table>';
         chartHost.innerHTML = html;
+        renderPickActionButtons();
         showLatest();
         renderPredictionPanel();
         setTimeout(() => { resizeCanvas(); drawBlueTrendLines(); }, 60);
+      };
+      const pickRowByLine = (line) => chartHost.querySelector(`.pick-row [data-pick-line="${line}"]`)?.closest("tr");
+      const positionPickActionButton = (button, line, side) => {
+        const row = pickRowByLine(line);
+        const table = chartHost.querySelector(".chart-table");
+        if (!row || !table) return;
+        const top = row.offsetTop + Math.max(0, (row.offsetHeight - button.offsetHeight) / 2);
+        const workspaceRect = chartSurface.parentElement.getBoundingClientRect();
+        const hostRect = chartHost.getBoundingClientRect();
+        const visibleLeft = workspaceRect.left - hostRect.left + 8;
+        const visibleRight = workspaceRect.right - hostRect.left - button.offsetWidth - 8;
+        const clampToVisible = (left) => Math.max(visibleLeft, Math.min(left, visibleRight));
+        button.style.top = `${top}px`;
+        if (side === "left") button.style.left = `${Math.max(table.offsetLeft - button.offsetWidth - 6, visibleLeft)}px`;
+        else button.style.left = `${clampToVisible(table.offsetLeft + table.offsetWidth + 6)}px`;
+      };
+      const positionPickActionButtons = () => {
+        const swapButton = chartHost.querySelector('[data-pick-swap]');
+        if (swapButton) positionPickActionButton(swapButton, 1, "left");
+        chartHost.querySelectorAll('[data-pick-clear]').forEach((button) => {
+          positionPickActionButton(button, Number(button.dataset.pickClear), "right");
+        });
+      };
+      const schedulePickActionButtonPosition = () => { cancelAnimationFrame(pickActionPositionTimer); pickActionPositionTimer = requestAnimationFrame(positionPickActionButtons); };
+      const renderPickActionButtons = () => {
+        chartHost.querySelectorAll(".pick-action-button").forEach((button) => button.remove());
+        if (!pickRowByLine(1)) return;
+        const swapButton = document.createElement("button");
+        swapButton.className = "pick-action-button";
+        swapButton.type = "button";
+        swapButton.dataset.pickSwap = "1-2";
+        swapButton.textContent = "\u8c03\u6362";
+        const clearButtons = [1, 2, 3].map((line) => {
+          const button = document.createElement("button");
+          button.className = "pick-action-button";
+          button.type = "button";
+          button.dataset.pickClear = String(line);
+          button.textContent = "\u6e05\u9664";
+          return button;
+        });
+        chartHost.append(swapButton, ...clearButtons);
+        positionPickActionButtons();
       };
       const parsePredictionInput = (value) => {
         const raw = String(value || "").trim();
@@ -1043,8 +1091,9 @@
         canvas.height = Math.max(1, Math.floor(height * ratio));
         ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
         drawAll();
+        positionPickActionButtons();
       };
-      const scheduleResize = () => { cancelAnimationFrame(resizeTimer); resizeTimer = requestAnimationFrame(() => { resizeCanvas(); drawBlueTrendLines(); }); };
+      const scheduleResize = () => { cancelAnimationFrame(resizeTimer); resizeTimer = requestAnimationFrame(() => { resizeCanvas(); drawBlueTrendLines(); positionPickActionButtons(); }); };
       const cloneAction = (action) => JSON.parse(JSON.stringify(action));
       const normalizeBounds = (bounds) => ({ x: Math.min(bounds.x, bounds.x + bounds.w), y: Math.min(bounds.y, bounds.y + bounds.h), w: Math.abs(bounds.w), h: Math.abs(bounds.h) });
       const pointsBounds = (points) => {
@@ -1194,12 +1243,22 @@
         }
       };
       const save = async () => {
-        const payload = buildRecordPayload();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-        const portableSaved = await persistPortableRecord(payload);
-        setStatus(isLocalServer() && !portableSaved ? "已保存到浏览器，移动硬盘记录写入失败" : "已自动保存");
+        if (saveInFlight) { savePending = true; return; }
+        saveInFlight = true;
+        try {
+          let finalPortableSaved = true;
+          do {
+            savePending = false;
+            const payload = buildRecordPayload();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+            finalPortableSaved = await persistPortableRecord(payload);
+          } while (savePending);
+          setStatus(isLocalServer() && !finalPortableSaved ? "已保存到浏览器，移动硬盘记录写入失败" : "已自动保存");
+        } finally {
+          saveInFlight = false;
+        }
       };
-      const scheduleSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(save, 180); };
+      const scheduleSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(save, 220); };
       const applyRecordPayload = (payload) => {
         if (Array.isArray(payload.actions)) actions = payload.actions;
         if (payload.picks) picks = { ...picks, ...payload.picks };
@@ -1344,7 +1403,9 @@
           canvas.setPointerCapture(event.pointerId);
           return;
         }
-        const pickCell = elementBelowCanvas(event)?.closest?.("[data-pick-line]");
+        const chartActionTarget = elementBelowCanvas(event);
+        if (handlePickRowAction(chartActionTarget)) return;
+        const pickCell = chartActionTarget?.closest?.("[data-pick-line]");
         if (pickCell) { togglePickCell(pickCell); return; }
         if (selectedIndex >= 0) {
           selectedIndex = -1;
@@ -1411,6 +1472,37 @@
           const number = Number(cell.dataset.pickNumber);
           setPickCellDisplay(cell, picks[line]?.[color]?.includes(number));
         });
+      };
+      const swapPickLines = (firstLine = 1, secondLine = 2) => {
+        const first = picks[firstLine] || { red: [], blue: [] };
+        const second = picks[secondLine] || { red: [], blue: [] };
+        picks[firstLine] = { red: [...second.red], blue: [...second.blue] };
+        picks[secondLine] = { red: [...first.red], blue: [...first.blue] };
+        syncPickLineDom(firstLine);
+        syncPickLineDom(secondLine);
+        scheduleSave();
+        setStatus(`\u9884\u9009${firstLine}\u548c\u9884\u9009${secondLine}\u5df2\u8c03\u6362`);
+      };
+      const clearPickLine = (line) => {
+        if (!picks[line]) return;
+        picks[line] = { red: [], blue: [] };
+        syncPickLineDom(line);
+        scheduleSave();
+        setStatus(`\u9884\u9009${line}\u5df2\u6e05\u9664`);
+      };
+      const handlePickRowAction = (target) => {
+        const swapButton = target?.closest?.('[data-pick-swap]');
+        if (swapButton) {
+          const [firstLine, secondLine] = String(swapButton.dataset.pickSwap || '1-2').split('-').map(Number);
+          swapPickLines(firstLine || 1, secondLine || 2);
+          return true;
+        }
+        const clearButton = target?.closest?.('[data-pick-clear]');
+        if (clearButton) {
+          clearPickLine(Number(clearButton.dataset.pickClear));
+          return true;
+        }
+        return false;
       };
       const togglePickCell = (cell) => {
         const line = Number(cell.dataset.pickLine);
@@ -1589,6 +1681,7 @@
           updatePredictionLineFromInput(editor, true);
         });
         chartHost.addEventListener("click", (event) => {
+          if (handlePickRowAction(event.target)) return;
           const cell = event.target.closest("[data-pick-line]");
           if (cell) togglePickCell(cell);
         });
@@ -1634,6 +1727,7 @@
         canvas.addEventListener("pointerup", onPointerUp);
         canvas.addEventListener("pointercancel", onPointerUp);
         window.addEventListener("resize", scheduleResize);
+        chartSurface.parentElement.addEventListener("scroll", schedulePickActionButtonPosition);
         new ResizeObserver(scheduleResize).observe(chartHost);
       };
       const init = async () => {

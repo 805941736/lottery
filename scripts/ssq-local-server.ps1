@@ -1,4 +1,4 @@
-﻿param(
+param(
   [int]$Port = 8765,
   [switch]$Open
 )
@@ -46,10 +46,44 @@ function Open-ExistingServerIfAvailable {
   } catch {}
   return $false
 }
+function Write-TextAtomic([string]$Path, [string]$Text) {
+  $directory = Split-Path -Parent $Path
+  if (-not (Test-Path -LiteralPath $directory -PathType Container)) { New-Item -ItemType Directory -Path $directory | Out-Null }
+  $fileName = [IO.Path]::GetFileName($Path)
+  $tempPath = Join-Path $directory ('.' + $fileName + '.' + [guid]::NewGuid().ToString('N') + '.tmp')
+  try {
+    [IO.File]::WriteAllText($tempPath, $Text, [Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $tempPath -Destination $Path -Force
+  } finally {
+    if (Test-Path -LiteralPath $tempPath -PathType Leaf) { Remove-Item -LiteralPath $tempPath -Force }
+  }
+}
 function Save-ServerState([int]$actualPort) {
-  if (-not (Test-Path -LiteralPath $DataRoot -PathType Container)) { New-Item -ItemType Directory -Path $DataRoot | Out-Null }
   $state = [ordered]@{ port = $actualPort; startedAt = (Get-Date).ToString('o') }
-  [IO.File]::WriteAllText($serverStatePath, ($state | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+  Write-TextAtomic $serverStatePath ($state | ConvertTo-Json -Compress)
+}
+function Assert-LotteryRow($row) {
+  if (-not ([string]$row.issue -match '^\d{5}$')) { throw "invalid issue: $($row.issue)" }
+  $red = @($row.red | ForEach-Object { [int]$_ })
+  if ($red.Count -ne 6) { throw "issue $($row.issue) must have 6 red balls" }
+  if (@($red | Sort-Object -Unique).Count -ne 6) { throw "issue $($row.issue) has duplicate red balls" }
+  foreach ($number in $red) { if ($number -lt 1 -or $number -gt 33) { throw "issue $($row.issue) red ball out of range: $number" } }
+  $blue = [int]$row.blue
+  if ($blue -lt 1 -or $blue -gt 16) { throw "issue $($row.issue) blue ball out of range: $blue" }
+}
+function Assert-LotteryPayload($payload) {
+  $rows = @($payload.chart.rows)
+  if ($rows.Count -le 0) { throw 'lottery payload has no rows' }
+  $lastIssue = 0
+  foreach ($row in $rows) {
+    Assert-LotteryRow $row
+    $issue = [int]$row.issue
+    if ($issue -le $lastIssue) { throw "lottery issues are not strictly ascending near $($row.issue)" }
+    $lastIssue = $issue
+  }
+  $latest = $rows[-1]
+  $latestIssue = '20' + [string]$latest.issue
+  if ($payload.latest -and [string]$payload.latest.issue -ne $latestIssue) { throw "latest issue mismatch: $($payload.latest.issue) vs $latestIssue" }
 }
 
 function New-ResponseBytes([string]$status, [string]$contentType, [byte[]]$body) {
@@ -103,7 +137,7 @@ function Read-HttpRequest($client) {
   [pscustomobject]@{ Method = $requestLine[0]; Path = $requestLine[1]; Body = $body }
 }
 function Read-500Html {
-  $response = Invoke-WebRequest -Uri $chartUrl -UseBasicParsing -TimeoutSec 30 -Headers @{ 'User-Agent' = 'Mozilla/5.0'; Referer = 'https://datachart.500.com/ssq/' }
+  $response = Invoke-WebRequest -Uri $chartUrl -UseBasicParsing -TimeoutSec 15 -Headers @{ 'User-Agent' = 'Mozilla/5.0'; Referer = 'https://datachart.500.com/ssq/' }
   $memory = New-Object IO.MemoryStream
   $response.RawContentStream.CopyTo($memory)
   [Text.Encoding]::GetEncoding('gb2312').GetString($memory.ToArray())
@@ -169,9 +203,9 @@ function Merge-WithLocalHistory($payload) {
   $payload
 }
 function Save-DataFiles($payload) {
-  if (-not (Test-Path -LiteralPath $DataRoot -PathType Container)) { New-Item -ItemType Directory -Path $DataRoot | Out-Null }
-  'window.SSQ_CHART_DATA = ' + (($payload.chart) | ConvertTo-Json -Depth 8 -Compress) + ';' | Set-Content -LiteralPath (Join-Path $DataRoot 'chart-data.js') -Encoding UTF8
-  'window.SSQ_LATEST = ' + (($payload.latest) | ConvertTo-Json -Depth 8 -Compress) + ';' | Set-Content -LiteralPath (Join-Path $DataRoot 'latest-ssq.js') -Encoding UTF8
+  Assert-LotteryPayload $payload
+  Write-TextAtomic (Join-Path $DataRoot 'chart-data.js') ('window.SSQ_CHART_DATA = ' + (($payload.chart) | ConvertTo-Json -Depth 8 -Compress) + ';')
+  Write-TextAtomic (Join-Path $DataRoot 'latest-ssq.js') ('window.SSQ_LATEST = ' + (($payload.latest) | ConvertTo-Json -Depth 8 -Compress) + ';')
 }
 function Handle-Request($client, $request) {
   $requestPath = [uri]::UnescapeDataString(($request.Path -split '\?', 2)[0].TrimStart('/'))
@@ -189,7 +223,7 @@ function Handle-Request($client, $request) {
       try { $null = $request.Body | ConvertFrom-Json } catch { Write-Text $client '{"error":"invalid json"}' 'application/json; charset=utf-8' '400 Bad Request'; return }
       if (-not (Test-Path -LiteralPath $DataRoot -PathType Container)) { New-Item -ItemType Directory -Path $DataRoot | Out-Null }
       Backup-RecordFile
-      [IO.File]::WriteAllText($recordPath, $request.Body, [Text.UTF8Encoding]::new($false))
+      Write-TextAtomic $recordPath $request.Body
       Write-Text $client '{"ok":true}' 'application/json; charset=utf-8'
       return
     }
@@ -197,9 +231,15 @@ function Handle-Request($client, $request) {
     return
   }
   if ($requestPath -eq 'api/refresh') {
-    $payload = Merge-WithLocalHistory (Get-500Payload)
-    Save-DataFiles $payload
-    Write-Text $client ($payload | ConvertTo-Json -Depth 8 -Compress) 'application/json; charset=utf-8'
+    try {
+      $payload = Merge-WithLocalHistory (Get-500Payload)
+      Assert-LotteryPayload $payload
+      Save-DataFiles $payload
+      Write-Text $client ($payload | ConvertTo-Json -Depth 8 -Compress) 'application/json; charset=utf-8'
+    } catch {
+      $errorPayload = [ordered]@{ error = 'refresh failed'; message = $_.Exception.Message }
+      Write-Text $client ($errorPayload | ConvertTo-Json -Compress) 'application/json; charset=utf-8' '502 Bad Gateway'
+    }
     return
   }
   $fullPath = Join-Path $ProjectRoot $requestPath
