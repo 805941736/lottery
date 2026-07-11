@@ -77,10 +77,10 @@
     </section>
   </main>
   <script src="../data/chart-data.js"></script>
+  <script src="./core/ssq-core.js"></script>
   <script>
     (() => {
-      const STORAGE_KEY = "ssq-analysis-portable-record";
-      const STORAGE_SCHEMA_VERSION = 10;
+      const { normalizePicks, readRecord, writeRecord } = window.SSQCore;
       const rows = window.SSQ_CHART_DATA?.rows || [];
       const strategies = [
         { id: "frequency", title: "频率均衡", text: "参考近期开奖出现次数，避免完全追冷或完全追热。", example: "示例：近30期出现频率居中的红球保留基础权重。", defaultOn: true },
@@ -164,16 +164,12 @@ ${item.example}"><h3>${item.title}</h3></button>`).join("");
         resultPick.innerHTML = result.red.map((n) => ball(n, "red")).join("") + result.blue.map((n) => ball(n, "blue")).join("");
         scoreGrid.innerHTML = renderScores("红球评分前列", result.red, 33, "red", redStats) + renderScores("蓝球评分前列", result.blue, 16, "blue", blueStats);
       };
-      const readPayload = () => {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); }
-        catch { return {}; }
-      };
       const save = () => {
         if (!result.red.length) run();
-        const payload = readPayload();
-        const picks = { 1: { red: [], blue: [] }, 2: { red: [], blue: [] }, 3: { red: [], blue: [] }, ...(payload.picks || {}) };
+        const payload = readRecord();
+        const picks = normalizePicks(payload.picks);
         picks[1] = result;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...payload, version: STORAGE_SCHEMA_VERSION, savedAt: new Date().toISOString(), picks }));
+        writeRecord({ picks: normalizePicks(picks) });
       };
       renderStrategies();
       strategyList.addEventListener("click", (event) => {
@@ -192,4 +188,3 @@ ${item.example}"><h3>${item.title}</h3></button>`).join("");
   </script>
 </body>
 </html>
-

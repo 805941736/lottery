@@ -84,7 +84,8 @@
     .canvas-layer.hand-mode { cursor: default; }
     .canvas-layer.select-mode { cursor: default; }
     .canvas-layer.hidden-layer { opacity: 0; pointer-events: none; }
-    .text-box { position: absolute; z-index: 6; min-width: 120px; max-width: 360px; padding: 7px 9px; border: 1px solid #9ca3af; border-radius: 6px; outline: 2px solid rgba(21,94,239,.18); color: var(--text); background: rgba(255,255,255,.94); box-shadow: 0 6px 18px rgba(31,41,55,.18); resize: both; overflow: auto; }
+    .text-box { position: absolute; z-index: 6; width: calc(1em + 4px); min-width: 22px; max-width: min(460px, calc(100vw - 32px)); height: 22px; min-height: 22px; max-height: 260px; margin: 0; padding: 0; border: 0; border-radius: 0; outline: none; appearance: none; -webkit-appearance: none; color: var(--text); background: transparent; box-shadow: none; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; line-height: 1.25; white-space: pre; word-break: normal; resize: none; overflow: hidden; }
+    .text-box:focus { border: 0; background: transparent; box-shadow: none; }
     .prediction-panel { width: 100%; max-width: 1546px; margin: 12px auto 0; padding: 12px; border: 1px solid var(--line); background: #fff; user-select: text; }
     .prediction-grid { display: grid; gap: 12px; }
     .feature-top-row { display: grid; grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr); gap: 12px; align-items: stretch; }
@@ -175,12 +176,8 @@
         <button class="swatch-button" type="button" data-color="#f3d36b" style="--swatch:#f3d36b" title="马卡龙黄"></button>
       </div>
       <div class="group" role="group" aria-label="操作">
-        <button class="action-button" type="button" id="undoButton" title="撤销"><svg class="icon" viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4"></path><path d="M5 10h10a5 5 0 0 1 0 10h-1"></path></svg>撤销</button>
         <button class="action-button" type="button" id="toggleButton" title="隐藏或显示标注"><svg class="icon" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg><span id="toggleText">隐藏</span></button>
         <button class="action-button" type="button" id="exportButton" title="导出图表和标注PNG"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="M7 10l5 5 5-5"></path><path d="M12 15V3"></path></svg>导出</button>
-        <button class="action-button" type="button" id="saveRecordButton" title="保存标注记录文件到移动硬盘"><svg class="icon" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8"></path><path d="M7 3v5h8"></path></svg>保存记录</button>
-        <button class="action-button" type="button" id="loadRecordButton" title="从记录文件恢复标注"><svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="M17 8l-5-5-5 5"></path><path d="M12 3v12"></path></svg>导入记录</button>
-        <button class="action-button" type="button" id="clearButton" title="清空所有标注"><svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v5"></path><path d="M14 11v5"></path></svg>清空</button>
       </div>
       <div class="latest-panel"><span class="latest-label">最新</span><span class="issue" id="latestIssue">加载中</span><span class="balls" id="latestBalls"></span><button class="action-button refresh-latest" type="button" id="refreshLatestButton" title="刷新顶部最新开奖"><svg class="icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2"></path><path d="M3 12A9 9 0 0 1 18.5 5.8"></path><path d="M18 2v4h-4"></path><path d="M6 22v-4h4"></path></svg></button></div>
       <div class="status" id="statusText">自动保存已开启</div>
@@ -193,22 +190,53 @@
         <canvas class="canvas-layer hand-mode" id="drawCanvas" aria-label="标注绘图层"></canvas>
         <input class="hidden-input" id="recordInput" type="file" accept="application/json,.json">
       </div>
-      <div class="hint" id="hintText">手型模式可拖动/滚动查看图表；选择画笔、直线、箭头、矩形、圆圈或文字后可在图表上标注。</div>
     </section>
   </main>
   <script src="../data/latest-ssq.js"></script>
   <script src="../data/chart-data.js"></script>
   <script src="../data/backtest-predictions.js"></script>
+  <script src="./core/ssq-core.js"></script>
+  <script src="./core/annotation-geometry.js"></script>
   <script>
     (() => {
       const APP_VERSION = "v2.1";
-      const STORAGE_SCHEMA_VERSION = 10;
-      const STORAGE_KEY = "ssq-analysis-portable-record";
+      const core = window.SSQCore || (() => {
+        const uniqueSorted = (items, max) => [...new Set((items || []).map(Number).filter((value) => Number.isInteger(value) && value >= 1 && value <= max))].sort((a, b) => a - b);
+        const normalizePick = (pick) => ({ red: uniqueSorted(pick?.red, 33).slice(0, 6), blue: uniqueSorted(pick?.blue, 16).slice(0, 1) });
+        return {
+          STORAGE_KEY: "ssq-analysis-portable-record",
+          STORAGE_SCHEMA_VERSION: 10,
+          uniqueSorted,
+          htmlEscape: (value) => String(value ?? "").replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]),
+          normalizePicks: (picks) => Object.fromEntries([1, 2, 3].map((line) => [line, normalizePick(picks?.[line])])),
+          parsePickInput: (value) => {
+            const raw = String(value || "").trim();
+            const digits = raw.replace(/\D/g, "");
+            const values = raw && /^\d{14}$/.test(digits) ? digits.match(/\d{2}/g).map(Number) : (raw.match(/\d{1,2}/g) || []).map(Number);
+            return normalizePick({ red: values.slice(0, 6), blue: values.slice(6, 7) });
+          }
+        };
+      })();
+      const geometry = window.SSQAnnotationGeometry || (() => {
+        const normalizeBounds = (bounds) => ({ x: Math.min(bounds.x, bounds.x + bounds.w), y: Math.min(bounds.y, bounds.y + bounds.h), w: Math.abs(bounds.w), h: Math.abs(bounds.h) });
+        const scalePoint = (point, from, to) => ({ x: to.x + ((point.x - from.x) / Math.max(1, from.w)) * Math.max(1, to.w), y: to.y + ((point.y - from.y) / Math.max(1, from.h)) * Math.max(1, to.h) });
+        return {
+          normalizeBounds,
+          scalePoint,
+          pointInBounds: (point, bounds, pad = 0) => Boolean(bounds) && point.x >= bounds.x - pad && point.x <= bounds.x + bounds.w + pad && point.y >= bounds.y - pad && point.y <= bounds.y + bounds.h + pad,
+          pointsBounds: (points) => { const xs = points.map((point) => point.x), ys = points.map((point) => point.y); return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) }; },
+          boundsFromHandle: (bounds, handle, point) => { const next = { ...bounds }; if (handle.includes("n")) { next.h = bounds.y + bounds.h - point.y; next.y = point.y; } if (handle.includes("s")) next.h = point.y - bounds.y; if (handle.includes("w")) { next.w = bounds.x + bounds.w - point.x; next.x = point.x; } if (handle.includes("e")) next.w = point.x - bounds.x; return normalizeBounds(next); }
+        };
+      })();
+      const { STORAGE_KEY, STORAGE_SCHEMA_VERSION, htmlEscape, normalizePicks: normalizeSharedPicks, parsePickInput, uniqueSorted } = core;
+      const { boundsFromHandle, normalizeBounds, pointInBounds, pointsBounds, scalePoint } = geometry;
       const OLD_KEYS = ["ssq-analysis-annotations-v1", "ssq-analysis-annotations-v5", "ssq-analysis-annotations-v4", "ssq-analysis-annotations-v3", "ssq-analysis-annotations-v2"];
       const MARKER_STYLE = Object.freeze({ width: 3, defaultColor: "#79aee8" });
       const REFRESH_ENDPOINT = "/api/refresh";
       const RECORD_ENDPOINT = "/api/records";
       const RECORD_FILE_NAME = "ssq-analysis-records.json";
+      const HISTORY_LIMIT = 60;
+      const HISTORY_MAX_BYTES = 3 * 1024 * 1024;
       const workspace = document.getElementById("workspace");
       const chartSurface = document.getElementById("chartSurface");
       const chartHost = document.getElementById("chartHost");
@@ -221,17 +249,15 @@
       const statusText = document.getElementById("statusText");
       const toggleButton = document.getElementById("toggleButton");
       const toggleText = document.getElementById("toggleText");
-      const clearButton = document.getElementById("clearButton");
-      const undoButton = document.getElementById("undoButton");
       const exportButton = document.getElementById("exportButton");
       const refreshChartButton = document.getElementById("refreshChartButton");
       const latestIssue = document.getElementById("latestIssue");
       const latestBalls = document.getElementById("latestBalls");
       const refreshLatestButton = document.getElementById("refreshLatestButton");
-      const saveRecordButton = document.getElementById("saveRecordButton");
-      const loadRecordButton = document.getElementById("loadRecordButton");
       const recordInput = document.getElementById("recordInput");
       const toolButtons = Array.from(document.querySelectorAll(".tool-button"));
+      toolButtons.forEach((button) => button.setAttribute("aria-label", button.title));
+      swatchButtons.forEach((button) => button.setAttribute("aria-label", button.title));
       let actions = [];
       let picks = { 1: { red: [], blue: [] }, 2: { red: [], blue: [] }, 3: { red: [], blue: [] } };
       let predictionLines = { 1: { red: [], blue: [] }, 2: { red: [], blue: [] }, 3: { red: [], blue: [] } };
@@ -259,6 +285,8 @@
       let editOriginalAction = null;
       let editOriginalBounds = null;
       let editHasMoved = false;
+      let editingTextIndex = -1;
+      let activeTextBox = null;
       let redMiss = Array(34).fill(0);
       let blueMiss = Array(17).fill(0);
       let strokeColor = swatchButtons.find((button) => button.classList.contains("active"))?.dataset.color || MARKER_STYLE.defaultColor;
@@ -286,14 +314,12 @@
       ]);
       let strategyLibrary = DEFAULT_STRATEGIES.map((strategy) => ({ ...strategy }));
       let selectedStrategyIds = [];
-      const htmlEscape = (value) => String(value ?? "").replace(/[&<>"]/g, (char) => { if (char === "&") return "&amp;"; if (char === "<") return "&lt;"; if (char === ">") return "&gt;"; return "&quot;"; });
-      const uniqueSorted = (items, max) => [...new Set((items || []).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= max))].sort((a, b) => a - b);
+      let historyPast = [];
+      let historyFuture = [];
+      let historySnapshot = null;
+      let restoringHistory = false;
       const normalizePicks = () => {
-        for (let line = 1; line <= 3; line += 1) {
-          picks[line] = picks[line] || { red: [], blue: [] };
-          picks[line].red = uniqueSorted(picks[line].red, 33).slice(0, 6);
-          picks[line].blue = uniqueSorted(picks[line].blue, 16).slice(0, 1);
-        }
+        picks = normalizeSharedPicks(picks);
       };
       const currentChartIssues = () => (window.SSQ_CHART_DATA?.rows || []).map((row) => String(row.issue));
       const buildHotRedMap = (rows) => {
@@ -364,8 +390,8 @@
       const refreshLotteryData = async () => {
         const isLocalServer = location.protocol.startsWith("http") && /^(127\.0\.0\.1|localhost)$/i.test(location.hostname);
         if (!isLocalServer) {
-          setStatus("请用打开双色球分析.cmd打开后再刷新数据");
-          alert("浏览器安全限制不允许 file:// 页面直接刷新官方数据。请双击打开双色球分析.cmd启动本地刷新服务后，再点刷新图表。");
+          setStatus("请先用对应系统的启动脚本打开后再刷新数据");
+          alert("请先双击对应系统的启动入口打开本项目，再点刷新图表。Windows 使用“打开双色球分析.vbs”，macOS 使用“打开双色球分析.app”。");
           return false;
         }
         setStatus("正在刷新500彩票网数据...");
@@ -471,7 +497,7 @@
       };
       const renderChart = () => {
         const rows = window.SSQ_CHART_DATA?.rows || [];
-        if (!rows.length) { chartHost.innerHTML = '<div style="padding:24px;background:#fff;border:1px solid #d7dce3">未找到本地图表数据，请运行“打开双色球分析.cmd”刷新。</div>'; return; }
+        if (!rows.length) { chartHost.innerHTML = '<div style="padding:24px;background:#fff;border:1px solid #d7dce3">未找到本地图表数据，请运行对应系统的启动脚本刷新。</div>'; return; }
         redMiss = Array(34).fill(0); blueMiss = Array(17).fill(0);
         const hotRedMap = buildHotRedMap(rows);
         chartMeta.textContent = `最近 ${rows.length} 期，生成时间：${window.SSQ_CHART_DATA.generatedAt || "未知"}`;
@@ -558,18 +584,7 @@
         chartHost.append(swapButton, ...clearButtons);
         positionPickActionButtons();
       };
-      const parsePredictionInput = (value) => {
-        const raw = String(value || "").trim();
-        const digits = raw.replace(/\D/g, "");
-        const numbers = raw && /^\d{14}$/.test(digits) ? digits.match(/\d{2}/g).map(Number) : (raw.match(/\d{1,2}/g) || []).map(Number);
-        const red = [];
-        for (const number of numbers.slice(0, 6)) {
-          if (number >= 1 && number <= 33 && !red.includes(number)) red.push(number);
-        }
-        const blueNumber = numbers[6];
-        const blue = blueNumber >= 1 && blueNumber <= 16 ? [blueNumber] : [];
-        return { red: red.sort((a, b) => a - b), blue };
-      };
+      const parsePredictionInput = parsePickInput;
       const pickInputValue = (pick) => [...uniqueSorted(pick?.red || [], 33), ...uniqueSorted(pick?.blue || [], 16)].map((n) => String(n).padStart(2, "0")).join(" ");
       const completePick = (pick) => uniqueSorted(pick?.red || [], 33).length === 6 && uniqueSorted(pick?.blue || [], 16).length === 1;
       const normalizePredictionLines = () => {
@@ -1095,22 +1110,24 @@
       };
       const scheduleResize = () => { cancelAnimationFrame(resizeTimer); resizeTimer = requestAnimationFrame(() => { resizeCanvas(); drawBlueTrendLines(); positionPickActionButtons(); }); };
       const cloneAction = (action) => JSON.parse(JSON.stringify(action));
-      const normalizeBounds = (bounds) => ({ x: Math.min(bounds.x, bounds.x + bounds.w), y: Math.min(bounds.y, bounds.y + bounds.h), w: Math.abs(bounds.w), h: Math.abs(bounds.h) });
-      const pointsBounds = (points) => {
-        const xs = points.map((point) => point.x);
-        const ys = points.map((point) => point.y);
-        return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+      const textBounds = (action) => {
+        const fontSize = Math.max(14, action.width * 4);
+        const lineHeight = Math.max(18, action.width * 5);
+        const lines = String(action.text || "").split("\n");
+        ctx.save();
+        ctx.font = `${fontSize}px "Microsoft YaHei", Arial, sans-serif`;
+        const metrics = [ctx.measureText("一"), ...lines.map((line) => ctx.measureText(line || " "))];
+        const width = Math.max(...metrics.map((item) => item.width));
+        const glyphHeight = Math.max(fontSize * .9, ...metrics.map((item) => (item.actualBoundingBoxAscent || 0) + (item.actualBoundingBoxDescent || 0)));
+        ctx.restore();
+        const pad = Math.max(1, action.width * .12);
+        return { x: action.x - pad, y: action.y - pad, w: width + pad * 2, h: glyphHeight + Math.max(0, lines.length - 1) * lineHeight + pad * 2 };
       };
       const actionBounds = (action) => {
         if (!action) return null;
         if (action.type === "pen") return pointsBounds(action.points || []);
         if (action.type === "line" || action.type === "arrow" || action.type === "rect" || action.type === "ellipse") return normalizeBounds({ x: action.start.x, y: action.start.y, w: action.end.x - action.start.x, h: action.end.y - action.start.y });
-        if (action.type === "text") {
-          const fontSize = Math.max(14, action.width * 4);
-          const lines = String(action.text || "").split("\n");
-          const maxChars = Math.max(1, ...lines.map((line) => line.length));
-          return { x: action.x, y: action.y, w: Math.max(80, maxChars * fontSize * 0.62), h: Math.max(24, lines.length * Math.max(18, action.width * 5)) };
-        }
+        if (action.type === "text") return textBounds(action);
         return null;
       };
       const moveAction = (action, dx, dy) => {
@@ -1119,10 +1136,6 @@
         if (action.end) { action.end.x += dx; action.end.y += dy; }
         if (action.type === "text") { action.x += dx; action.y += dy; }
       };
-      const scalePoint = (point, from, to) => ({
-        x: to.x + ((point.x - from.x) / Math.max(1, from.w)) * Math.max(1, to.w),
-        y: to.y + ((point.y - from.y) / Math.max(1, from.h)) * Math.max(1, to.h)
-      });
       const scaleAction = (action, fromBounds, toBounds) => {
         const from = normalizeBounds(fromBounds);
         const to = normalizeBounds(toBounds);
@@ -1135,16 +1148,33 @@
           action.width = Math.max(1, action.width * Math.max(to.w / Math.max(1, from.w), to.h / Math.max(1, from.h)));
         }
       };
-      const pointInBounds = (point, bounds, pad = 6) => point.x >= bounds.x - pad && point.x <= bounds.x + bounds.w + pad && point.y >= bounds.y - pad && point.y <= bounds.y + bounds.h + pad;
+      const scaleTextAction = (action, fromBounds, toBounds, handle) => {
+        const from = normalizeBounds(fromBounds);
+        const to = normalizeBounds(toBounds);
+        const scale = Math.max(to.w / Math.max(1, from.w), to.h / Math.max(1, from.h));
+        action.width = Math.max(1, action.width * scale);
+        const next = actionBounds(action);
+        const fixedX = handle.includes("w") ? from.x + from.w : from.x;
+        const fixedY = handle.includes("n") ? from.y + from.h : from.y;
+        const currentX = handle.includes("w") ? next.x + next.w : next.x;
+        const currentY = handle.includes("n") ? next.y + next.h : next.y;
+        moveAction(action, fixedX - currentX, fixedY - currentY);
+      };
       const hitActionIndex = (point) => {
         for (let index = actions.length - 1; index >= 0; index -= 1) {
           const bounds = actionBounds(actions[index]);
-          if (bounds && pointInBounds(point, bounds, 8)) return index;
+          if (bounds && pointInBounds(point, bounds, actions[index].type === "text" ? 3 : 8)) return index;
+        }
+        return -1;
+      };
+      const hitTextIndex = (point) => {
+        for (let index = actions.length - 1; index >= 0; index -= 1) {
+          if (actions[index].type === "text" && pointInBounds(point, actionBounds(actions[index]), 5)) return index;
         }
         return -1;
       };
       const selectionHandle = (point, bounds) => {
-        const size = 8;
+        const size = 4;
         const handles = {
           nw: { x: bounds.x, y: bounds.y },
           ne: { x: bounds.x + bounds.w, y: bounds.y },
@@ -1156,28 +1186,28 @@
         }
         return null;
       };
-      const boundsFromHandle = (bounds, handle, point) => {
-        const next = { ...bounds };
-        if (handle.includes("n")) { next.h = bounds.y + bounds.h - point.y; next.y = point.y; }
-        if (handle.includes("s")) next.h = point.y - bounds.y;
-        if (handle.includes("w")) { next.w = bounds.x + bounds.w - point.x; next.x = point.x; }
-        if (handle.includes("e")) next.w = point.x - bounds.x;
-        return normalizeBounds(next);
+      const updateSelectionCursor = (point) => {
+        if (currentTool !== "hand" || selectedIndex < 0 || editMode) return;
+        const bounds = actionBounds(actions[selectedIndex]);
+        const handle = bounds && selectionHandle(point, bounds);
+        if (handle === "nw" || handle === "se") { canvas.style.cursor = "nwse-resize"; return; }
+        if (handle === "ne" || handle === "sw") { canvas.style.cursor = "nesw-resize"; return; }
+        canvas.style.cursor = bounds && pointInBounds(point, bounds, 0) ? "move" : "default";
       };
       const drawSelection = () => {
         const action = actions[selectedIndex];
         const bounds = actionBounds(action);
         if (!bounds) return;
         ctx.save();
-        ctx.setLineDash([6, 4]);
-        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.lineWidth = 1.25;
         ctx.strokeStyle = "#155eef";
         ctx.strokeRect(bounds.x, bounds.y, Math.max(1, bounds.w), Math.max(1, bounds.h));
         ctx.setLineDash([]);
         ctx.fillStyle = "#ffffff";
         ctx.strokeStyle = "#155eef";
         [[bounds.x, bounds.y], [bounds.x + bounds.w, bounds.y], [bounds.x, bounds.y + bounds.h], [bounds.x + bounds.w, bounds.y + bounds.h]].forEach(([x, y]) => {
-          ctx.beginPath(); ctx.rect(x - 4, y - 4, 8, 8); ctx.fill(); ctx.stroke();
+          ctx.save(); ctx.shadowColor = "rgba(21,94,239,.2)"; ctx.shadowBlur = 2; ctx.beginPath(); ctx.rect(x - 3, y - 3, 6, 6); ctx.fill(); ctx.stroke(); ctx.restore();
         });
         ctx.restore();
       };
@@ -1206,7 +1236,7 @@
       const drawPreview = () => { if (!isDrawing || !startPoint || !previewPoint || currentTool === "pen" || currentTool === "text") return; drawAction({ type: currentTool, start: startPoint, end: previewPoint, ...getStyle() }); };
       const drawAll = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        actions.forEach((action) => drawAction(action));
+        actions.forEach((action, index) => { if (index !== editingTextIndex) drawAction(action); });
         if (currentPath) drawAction(currentPath);
         drawPreview();
         drawSelection();
@@ -1228,6 +1258,22 @@
         savedBacktestPredictions,
         backtestWindowSize
       });
+      const buildHistorySnapshot = () => ({
+        actions,
+        picks,
+        predictionLines,
+        aiManualPick,
+        strategyLibrary,
+        selectedStrategyIds,
+        predictionIssue,
+        savedBacktestPredictions,
+        backtestWindowSize
+      });
+      const historyKey = (snapshot) => JSON.stringify(snapshot);
+      const trimHistory = (items) => {
+        let bytes = items.reduce((total, item) => total + item.length, 0);
+        while (items.length > HISTORY_LIMIT || bytes > HISTORY_MAX_BYTES) bytes -= items.shift().length;
+      };
       const persistPortableRecord = async (payload) => {
         if (!isLocalServer()) return false;
         try {
@@ -1258,7 +1304,19 @@
           saveInFlight = false;
         }
       };
-      const scheduleSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(save, 220); };
+      const scheduleSave = () => {
+        const nextSnapshot = buildHistorySnapshot();
+        const nextKey = historyKey(nextSnapshot);
+        if (!historySnapshot) historySnapshot = nextKey;
+        else if (!restoringHistory && nextKey !== historySnapshot) {
+          historyPast.push(historySnapshot);
+          trimHistory(historyPast);
+          historyFuture = [];
+          historySnapshot = nextKey;
+        } else if (restoringHistory) historySnapshot = nextKey;
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(save, 400);
+      };
       const applyRecordPayload = (payload) => {
         if (Array.isArray(payload.actions)) actions = payload.actions;
         if (payload.picks) picks = { ...picks, ...payload.picks };
@@ -1282,6 +1340,34 @@
         backtestWindowSize = [5, 10, 15, 20].includes(Number(payload.backtestWindowSize)) ? Number(payload.backtestWindowSize) : 20;
         loadedCoordinateSpace = payload.coordinateSpace || "surface";
         loadedChartIssues = Array.isArray(payload.chartIssues) ? payload.chartIssues.map(String) : null;
+      };
+      const refreshAfterHistory = () => {
+        renderPredictionPanel();
+        for (let line = 1; line <= 3; line += 1) syncPickLineDom(line);
+        drawAll();
+      };
+      const restoreHistorySnapshot = (snapshot) => {
+        restoringHistory = true;
+        applyRecordPayload(JSON.parse(snapshot));
+        refreshAfterHistory();
+        // applyRecordPayload 会做标准化，使用标准化后的状态作为当前历史节点，避免重做时被再次记成新操作。
+        historySnapshot = historyKey(buildHistorySnapshot());
+        scheduleSave();
+        restoringHistory = false;
+      };
+      const undoLastAction = () => {
+        if (!historyPast.length) return setStatus("没有可撤销的操作");
+        historyFuture.push(historySnapshot);
+        trimHistory(historyFuture);
+        restoreHistorySnapshot(historyPast.pop());
+        setStatus("已撤销");
+      };
+      const redoLastAction = () => {
+        if (!historyFuture.length) return setStatus("没有可重做的操作");
+        historyPast.push(historySnapshot);
+        trimHistory(historyPast);
+        restoreHistorySnapshot(historyFuture.pop());
+        setStatus("已重做");
       };
       const parseRecordPayload = (raw) => {
         if (!raw) return null;
@@ -1338,32 +1424,81 @@
         loadedCoordinateSpace = "chartHost";
         scheduleSave();
       };
-      const undoLastAction = () => { if (!actions.length) return setStatus("没有可撤销的标注"); actions.pop(); drawAll(); scheduleSave(); setStatus("已撤销"); };
       const commitAction = (action) => { actions.push(action); currentPath = null; previewPoint = null; isDrawing = false; drawAll(); scheduleSave(); };
-      const beginText = (point) => {
+      const beginText = (point, existingIndex = -1) => {
+        if (editingTextIndex >= 0) { activeTextBox?.focus(); return; }
         const box = document.createElement("textarea");
-        const style = getStyle();
+        const existing = existingIndex >= 0 ? actions[existingIndex] : null;
+        const style = existing ? { color: existing.color, width: existing.width } : getStyle();
+        const fontSize = Math.max(14, style.width * 4);
+        const editIndex = existingIndex >= 0 ? existingIndex : actions.length;
+        if (existingIndex < 0) actions.push({ type: "text", x: point.x, y: point.y, text: "", ...style });
         const surfacePoint = toSurfacePoint(point);
+        const editorTop = surfacePoint.y - Math.round(fontSize * .125);
         let finished = false;
         box.className = "text-box";
-        box.placeholder = "输入标注文字";
+        activeTextBox = box;
+        box.value = existing?.text || "";
+        box.setAttribute("aria-label", "文字标注输入框");
         box.style.left = `${surfacePoint.x}px`;
-        box.style.top = `${surfacePoint.y}px`;
+        box.style.top = `${editorTop}px`;
         box.style.color = style.color;
-        box.style.fontSize = `${Math.max(14, style.width * 4)}px`;
+        box.style.fontSize = `${fontSize}px`;
+        box.style.visibility = "hidden";
         chartSurface.appendChild(box);
+        const resizeTextBox = () => {
+          const fontSize = Math.max(14, style.width * 4);
+          const lineHeight = Math.max(18, style.width * 5);
+          const lines = String(box.value || "").split("\n");
+          ctx.save();
+          ctx.font = `${fontSize}px "Microsoft YaHei", Arial, sans-serif`;
+          const contentWidth = Math.max(ctx.measureText("一").width, ...lines.map((line) => ctx.measureText(line || " ").width));
+          ctx.restore();
+          box.style.width = `${Math.min(460, Math.max(22, Math.ceil(contentWidth + 4)))}px`;
+          box.style.height = "auto";
+          box.style.height = `${Math.min(260, Math.max(22, box.scrollHeight, lines.length * lineHeight + 4))}px`;
+          actions[editIndex] = { ...actions[editIndex], text: box.value };
+          drawAll();
+        };
+        resizeTextBox();
+        const maxLeft = Math.max(12, chartSurface.scrollWidth - box.offsetWidth - 12);
+        const maxTop = Math.max(12, chartSurface.scrollHeight - box.offsetHeight - 12);
+        box.style.left = `${Math.min(Math.max(12, surfacePoint.x), maxLeft)}px`;
+        box.style.top = `${Math.min(Math.max(0, editorTop), maxTop)}px`;
+        editingTextIndex = editIndex;
+        selectedIndex = editIndex;
+        drawAll();
+        box.style.visibility = "visible";
         box.focus();
+        box.setSelectionRange(box.value.length, box.value.length);
         const finish = () => {
           if (finished) return;
           finished = true;
           const text = box.value.trim();
           box.remove();
-          if (text) commitAction({ type: "text", x: point.x, y: point.y, text, ...style });
+          activeTextBox = null;
+          if (text) actions[editIndex] = { ...actions[editIndex], text };
+          else actions.splice(editIndex, 1);
+          editingTextIndex = -1;
+          selectedIndex = -1;
+          drawAll();
+          scheduleSave();
         };
         box.addEventListener("keydown", (event) => {
-          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); finish(); }
-          if (event.key === "Escape") { event.preventDefault(); finished = true; box.remove(); }
+          if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); finish(); }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            finished = true;
+            if (existingIndex >= 0) actions[existingIndex] = { ...actions[existingIndex], text: existing.text };
+            else actions.splice(editIndex, 1);
+            box.remove();
+            activeTextBox = null;
+            editingTextIndex = -1;
+            selectedIndex = -1;
+            drawAll();
+          }
         });
+        box.addEventListener("input", resizeTextBox);
         box.addEventListener("blur", finish, { once: true });
       };
       const selectAnnotationAtPoint = (point) => {
@@ -1387,7 +1522,7 @@
           editHasMoved = false;
           return true;
         }
-        if (!pointInBounds(point, selectedBounds, 8)) return false;
+        if (!pointInBounds(point, selectedBounds, 0)) return false;
         editMode = "move";
         editStartPoint = point;
         editOriginalAction = cloneAction(actions[selectedIndex]);
@@ -1398,7 +1533,7 @@
       const onPointerDown = (event) => {
         if (event.detail > 1) { event.preventDefault(); return; }
         const point = getPoint(event);
-        if (annotationsVisible && beginEditAtPoint(point)) {
+        if (currentTool === "hand" && annotationsVisible && beginEditAtPoint(point)) {
           event.preventDefault();
           canvas.setPointerCapture(event.pointerId);
           return;
@@ -1407,6 +1542,7 @@
         if (handlePickRowAction(chartActionTarget)) return;
         const pickCell = chartActionTarget?.closest?.("[data-pick-line]");
         if (pickCell) { togglePickCell(pickCell); return; }
+        if (currentTool === "text" && hitTextIndex(point) >= 0) return;
         if (selectedIndex >= 0) {
           selectedIndex = -1;
           editMode = null;
@@ -1427,6 +1563,7 @@
       const onPointerMove = (event) => {
         if (isDrawing || editMode) event.preventDefault();
         const point = getPoint(event);
+        updateSelectionCursor(point);
         if (editMode && selectedIndex >= 0) {
           const dx = point.x - editStartPoint.x;
           const dy = point.y - editStartPoint.y;
@@ -1434,7 +1571,12 @@
           editHasMoved = true;
           actions[selectedIndex] = cloneAction(editOriginalAction);
           if (editMode === "move") moveAction(actions[selectedIndex], dx, dy);
-          if (editMode.startsWith("resize:")) scaleAction(actions[selectedIndex], editOriginalBounds, boundsFromHandle(editOriginalBounds, editMode.split(":")[1], point));
+          if (editMode.startsWith("resize:")) {
+            const handle = editMode.split(":")[1];
+            const targetBounds = boundsFromHandle(editOriginalBounds, handle, point);
+            if (actions[selectedIndex].type === "text") scaleTextAction(actions[selectedIndex], editOriginalBounds, targetBounds, handle);
+            else scaleAction(actions[selectedIndex], editOriginalBounds, targetBounds);
+          }
           drawAll();
           return;
         }
@@ -1450,6 +1592,7 @@
           editOriginalAction = null;
           editOriginalBounds = null;
           editHasMoved = false;
+          canvas.style.cursor = "";
           scheduleSave();
           return;
         }
@@ -1592,6 +1735,7 @@
         selectedIndex = -1;
         editMode = null;
         canvas.classList.toggle("hand-mode", currentTool === "hand");
+        canvas.style.cursor = "";
         canvas.classList.remove("select-mode");
         toolButtons.forEach((item) => item.classList.toggle("active", item === button));
         setStatus(`当前工具：${button.title}`);
@@ -1600,28 +1744,45 @@
         event.preventDefault();
         event.stopPropagation();
         if (!annotationsVisible) return;
-        if (!selectAnnotationAtPoint(getPoint(event))) {
+        if (editingTextIndex >= 0) { activeTextBox?.focus(); return; }
+        const point = getPoint(event);
+        const hitIndex = currentTool === "text" ? hitTextIndex(point) : hitActionIndex(point);
+        if (currentTool === "text" && hitIndex >= 0) {
+          selectedIndex = -1;
+          drawAll();
+          beginText({ x: actions[hitIndex].x, y: actions[hitIndex].y }, hitIndex);
+          return;
+        }
+        if (!selectAnnotationAtPoint(point)) {
           selectedIndex = -1;
           editMode = null;
           drawAll();
           setStatus("已取消选中");
         }
       };
+      const deleteAnnotation = () => {
+        if (!actions.length) return setStatus("没有可删除的标记");
+        const deleteIndex = selectedIndex >= 0 ? selectedIndex : actions.length - 1;
+        actions.splice(deleteIndex, 1);
+        selectedIndex = -1;
+        editMode = null;
+        drawAll();
+        scheduleSave();
+        setStatus("已删除标记");
+      };
       const handleShortcut = (event) => {
         const isEditable = ["INPUT", "TEXTAREA"].includes(event.target.tagName);
-        if (!isEditable && event.key === "Delete" && selectedIndex >= 0) {
+        const isDeleteKey = event.key === "Delete" || event.key === "Backspace" || event.code === "Delete" || event.code === "Backspace";
+        if (!isEditable && event.metaKey && isDeleteKey) {
           event.preventDefault();
-          actions.splice(selectedIndex, 1);
-          selectedIndex = -1;
-          editMode = null;
-          drawAll();
-          scheduleSave();
-          setStatus("已删除选中标注");
+          event.stopPropagation();
+          deleteAnnotation();
           return;
         }
         if (!(event.ctrlKey || event.metaKey)) return;
         const key = event.key.toLowerCase();
         if (key === "z") { event.preventDefault(); undoLastAction(); }
+        if (key === "y") { event.preventDefault(); redoLastAction(); }
         if (key === "s") { event.preventDefault(); save(); }
       };
       const bindEvents = () => {
@@ -1691,23 +1852,12 @@
           swatchButtons.forEach((item) => item.classList.toggle("active", item === button));
           setStatus(`标注颜色：${button.title}`);
         }));
-        undoButton.addEventListener("click", undoLastAction);
-        clearButton.addEventListener("click", () => {
-          if (!actions.length) return setStatus("没有可清空的标注");
-          if (!confirm("确定清空所有标注吗？")) return;
-          actions = [];
-          drawAll();
-          scheduleSave();
-          setStatus("已清空");
-        });
         toggleButton.addEventListener("click", () => {
           annotationsVisible = !annotationsVisible;
           canvas.classList.toggle("hidden-layer", !annotationsVisible);
           toggleText.textContent = annotationsVisible ? "隐藏" : "显示";
           setStatus(annotationsVisible ? "标注层已显示" : "标注层已隐藏");
         });
-        saveRecordButton.addEventListener("click", saveRecordFile);
-        loadRecordButton.addEventListener("click", openRecordFile);
         recordInput.addEventListener("change", () => { readRecordFile(recordInput.files?.[0]); recordInput.value = ""; });
         exportButton.addEventListener("click", () => {
           const link = document.createElement("a");
@@ -1739,6 +1889,9 @@
         syncLoadedAnnotationsToCurrentChart();
         resizeCanvas();
         drawAll();
+        historyPast = [];
+        historyFuture = [];
+        historySnapshot = historyKey(buildHistorySnapshot());
         setStatus(actions.length ? "已恢复上次标注" : "自动保存已开启");
       };
       init();
