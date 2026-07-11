@@ -15,6 +15,19 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-nohup python3 "$SERVER_SCRIPT" --port "$PORT" >>"$LOG_PATH" 2>&1 &
+python3 "$SERVER_SCRIPT" --port "$PORT" </dev/null >>"$LOG_PATH" 2>&1 &
+SERVER_PID=$!
+
+for attempt in {1..40}; do
+  if /usr/bin/curl --silent --fail --max-time 1 "http://127.0.0.1:$PORT/launch-ready.js" >/dev/null 2>&1; then
+    open "http://127.0.0.1:$PORT/"
+    wait "$SERVER_PID"
+    exit $?
+  fi
+  sleep 0.1
+done
+
 open "$LAUNCH_PATH"
-exit 0
+osascript -e 'display dialog "本地服务未能启动。请检查 data/ssq-local-server.log，或联系维护者。" buttons {"好"} default button "好" with icon caution'
+kill "$SERVER_PID" >/dev/null 2>&1 || true
+exit 2
