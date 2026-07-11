@@ -1,0 +1,29 @@
+.workspace { position: relative; min-width: 0; min-height: 0; overflow: auto; background: #eef2f7; scrollbar-gutter: stable both-edges; }
+.chart-surface { position: relative; width: max-content; min-width: 100%; min-height: 100%; padding: 14px 14px 48vh; cursor: default; display: flex; flex-direction: column; align-items: center; user-select: none; }
+.chart-title { display: flex; align-items: center; justify-content: center; gap: 12px; height: 38px; width: 100%; max-width: 1546px; padding: 0 8px; background: #fff; border: 1px solid var(--grid); border-bottom: 0; font-weight: 700; }
+.chart-meta { color: var(--muted); font-size: 13px; font-weight: 400; }
+.chart-table { position: relative; z-index: 1; border-collapse: collapse; background: #fff; font-size: 12px; color: #1f2937; table-layout: fixed; margin: 0 auto; user-select: none; }
+.chart-table th, .chart-table td { width: 30px; min-width: 30px; height: 28px; border: 1px solid var(--grid); text-align: center; vertical-align: middle; font-variant-numeric: tabular-nums; }
+.chart-table th.issue-col, .chart-table td.issue-col { width: 68px; min-width: 68px; position: sticky; left: 14px; z-index: 2; background: #fff; font-weight: 700; }
+.chart-table thead th { position: sticky; top: 0; z-index: 3; background: #f8fafc; font-weight: 700; }
+.chart-table thead th.issue-col { z-index: 4; background: #f8fafc; }
+.sep { width: 8px !important; min-width: 8px !important; background: #cbd5e1 !important; padding: 0; }
+.miss { color: #eadada; }
+.chart-table tbody td:nth-child(n+36) .miss, .chart-table tbody td:nth-child(n+36) { color: #d8f2ff; }
+.hit { position: relative; z-index: 3; display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #fff; font-weight: 700; border: 0; box-shadow: none; }
+.hit.red { background: var(--red-ball); }
+.hit.blue { background: var(--blue-ball); }
+.hit.red.hot-red { background: #8f3e3e; }
+.five-sep td { border-bottom: 2px solid #aeb8c5; }
+#chartHost { position: relative; }
+.trend-layer { position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; overflow: visible; }
+.trend-layer line { stroke: #2997d1; stroke-width: 2; stroke-linecap: round; opacity: .86; }
+.latest-row td { background: #fffdf2; }
+.latest-row td.issue-col { color: #b42318; background: #fff7ed; }
+.pick-row td { background: #fbfcff; }
+.pick-action-button { position: absolute; z-index: 7; min-height: 24px; padding: 0 6px; border: 1px solid #cbd5e1; border-radius: 6px; color: #2563eb; background: #fff; font-size: 12px; line-height: 1; white-space: nowrap; writing-mode: horizontal-tb; cursor: pointer; box-shadow: 0 2px 8px rgba(15,23,42,.08); }
+.pick-action-button:hover { background: #eef4ff; }
+.pick-row td.issue-col { color: #2563eb; background: #eef4ff; }
+.pick-cell { color: #c5ccd6; cursor: pointer; }
+.pick-cell:hover { background: #eef4ff; }
+.pick-cell.pick-selected { color: #fff; }

@@ -1,0 +1,17 @@
+.backtest-window-buttons { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.backtest-window-button { min-height: 30px; padding: 0 10px; border: 1px solid #d7dce3; border-radius: 7px; color: #374151; background: #fff; cursor: pointer; }
+.backtest-window-button.selected { border-color: #155eef; color: #fff; background: #155eef; }
+.backtest-grid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 6px; margin: 6px 0; }
+.backtest-stat { border: 1px solid #e5e7eb; border-radius: 7px; padding: 6px; background: #f8fafc; font-size: 12px; }
+.backtest-stat-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.backtest-stat-extra { margin-left: auto; font-weight: 700; color: #0f172a; white-space: nowrap; }
+.backtest-panel { display: grid; gap: 8px; }
+.backtest-details { border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; overflow: hidden; }
+.backtest-details > summary { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; cursor: pointer; color: #1f2937; background: #f8fafc; font-weight: 700; }
+.backtest-details[open] > summary { border-bottom: 1px solid #e5e7eb; }
+.backtest-body { padding: 8px 10px; }
+.backtest-list { display: grid; gap: 6px; max-height: 420px; overflow: auto; }
+.backtest-issue { border: 1px solid #edf0f4; border-radius: 7px; background: #fbfcff; }
+.backtest-issue > summary { padding: 7px 8px; cursor: pointer; font-size: 12px; font-weight: 700; }
+.backtest-issue-body { display: grid; gap: 6px; padding: 0 8px 8px; font-size: 12px; }
+.backtest-result-line { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }

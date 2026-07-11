@@ -4,3 +4,8 @@ Thumbs.db
 data/ssq-analysis-records.json
 data/ssq-local-server.json
 data/record-backups/
+data/ssq-local-server.log
+._*
+**/._*
+__pycache__/
+*.py[cod]

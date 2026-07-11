@@ -11,6 +11,7 @@ $chartUrl = 'https://datachart.500.com/ssq/?expect=50'
 $recordPath = Join-Path $DataRoot 'ssq-analysis-records.json'
 $serverStatePath = Join-Path $DataRoot 'ssq-local-server.json'
 $recordBackupRoot = Join-Path $DataRoot 'record-backups'
+$maxRecordBytes = 2MB
 
 function Backup-RecordFile {
   if (-not (Test-Path -LiteralPath $recordPath -PathType Leaf)) { return }
@@ -22,15 +23,11 @@ function Backup-RecordFile {
 
 function Test-ExistingServer([int]$candidatePort) {
   if ($candidatePort -le 0) { return $false }
-  $client = [Net.Sockets.TcpClient]::new()
   try {
-    $task = $client.ConnectAsync('127.0.0.1', $candidatePort)
-    if (-not $task.Wait(150)) { return $false }
-    return $client.Connected
+    $response = Invoke-WebRequest -Uri "http://127.0.0.1:$candidatePort/launch-ready.js" -UseBasicParsing -TimeoutSec 1
+    return $response.StatusCode -eq 200 -and $response.Content.Trim() -eq 'window.__SSQ_READY__ = true;'
   } catch {
     return $false
-  } finally {
-    $client.Close()
   }
 }
 function Open-ExistingServerIfAvailable {
@@ -125,7 +122,10 @@ function Read-HttpRequest($client) {
       if ($headerEnd -gt 0) {
         $headerText = [Text.Encoding]::ASCII.GetString($bytes, 0, $headerEnd)
         $lengthMatch = [regex]::Match($headerText, '(?im)^Content-Length:\s*(\d+)')
-        if ($lengthMatch.Success) { $contentLength = [int]$lengthMatch.Groups[1].Value }
+        if ($lengthMatch.Success) {
+          $contentLength = [int]$lengthMatch.Groups[1].Value
+          if ($contentLength -gt $maxRecordBytes) { throw 'record is too large' }
+        }
       }
     }
   } while ($headerEnd -lt 0 -or ($memory.Length -lt ($headerEnd + $contentLength)))
@@ -140,7 +140,7 @@ function Read-500Html {
   $response = Invoke-WebRequest -Uri $chartUrl -UseBasicParsing -TimeoutSec 15 -Headers @{ 'User-Agent' = 'Mozilla/5.0'; Referer = 'https://datachart.500.com/ssq/' }
   $memory = New-Object IO.MemoryStream
   $response.RawContentStream.CopyTo($memory)
-  [Text.Encoding]::GetEncoding('gb2312').GetString($memory.ToArray())
+  [Text.Encoding]::GetEncoding('gb18030').GetString($memory.ToArray())
 }
 function Parse-Cells([string]$html) {
   $cells = @()
@@ -220,8 +220,11 @@ function Handle-Request($client, $request) {
       return
     }
     if ($request.Method -eq 'POST') {
-      try { $null = $request.Body | ConvertFrom-Json } catch { Write-Text $client '{"error":"invalid json"}' 'application/json; charset=utf-8' '400 Bad Request'; return }
+      if ([Text.Encoding]::UTF8.GetByteCount($request.Body) -gt $maxRecordBytes) { Write-Text $client '{"error":"record is too large"}' 'application/json; charset=utf-8' '413 Payload Too Large'; return }
+      try { $payload = $request.Body | ConvertFrom-Json } catch { Write-Text $client '{"error":"invalid json"}' 'application/json; charset=utf-8' '400 Bad Request'; return }
+      if ($payload -isnot [pscustomobject] -or ($payload.PSObject.Properties.Name -contains 'actions' -and $payload.actions -isnot [array])) { Write-Text $client '{"error":"invalid record"}' 'application/json; charset=utf-8' '400 Bad Request'; return }
       if (-not (Test-Path -LiteralPath $DataRoot -PathType Container)) { New-Item -ItemType Directory -Path $DataRoot | Out-Null }
+      if ((Test-Path -LiteralPath $recordPath -PathType Leaf) -and (Get-Content -LiteralPath $recordPath -Raw -Encoding UTF8) -eq $request.Body) { Write-Text $client '{"ok":true,"unchanged":true}' 'application/json; charset=utf-8'; return }
       Backup-RecordFile
       Write-TextAtomic $recordPath $request.Body
       Write-Text $client '{"ok":true}' 'application/json; charset=utf-8'
@@ -231,6 +234,7 @@ function Handle-Request($client, $request) {
     return
   }
   if ($requestPath -eq 'api/refresh') {
+    if ($request.Method -ne 'GET') { Write-Text $client '{"error":"method not allowed"}' 'application/json; charset=utf-8' '405 Method Not Allowed'; return }
     try {
       $payload = Merge-WithLocalHistory (Get-500Payload)
       Assert-LotteryPayload $payload
@@ -242,12 +246,14 @@ function Handle-Request($client, $request) {
     }
     return
   }
+  $publicFile = $requestPath -match '^app/([A-Za-z0-9_-]+/)*[A-Za-z0-9_-][A-Za-z0-9._-]*\.(html|js|css)$' -or $requestPath -in @('data/chart-data.js', 'data/latest-ssq.js', 'data/backtest-predictions.js')
+  if (-not $publicFile) { Write-Text $client 'Not found' 'text/plain; charset=utf-8' '404 Not Found'; return }
   $fullPath = Join-Path $ProjectRoot $requestPath
   $resolvedRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
   $resolvedFile = if (Test-Path -LiteralPath $fullPath -PathType Leaf) { (Resolve-Path -LiteralPath $fullPath).Path } else { $null }
   if ($resolvedFile -and ($resolvedFile.Equals($resolvedRoot, [StringComparison]::OrdinalIgnoreCase) -or $resolvedFile.StartsWith($resolvedRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or $resolvedFile.StartsWith($resolvedRoot + [IO.Path]::AltDirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase))) {
     $ext = [IO.Path]::GetExtension($fullPath).ToLowerInvariant()
-    $type = switch ($ext) { '.html' { 'text/html; charset=utf-8' } '.js' { 'application/javascript; charset=utf-8' } '.json' { 'application/json; charset=utf-8' } default { 'application/octet-stream' } }
+    $type = switch ($ext) { '.html' { 'text/html; charset=utf-8' } '.js' { 'application/javascript; charset=utf-8' } '.css' { 'text/css; charset=utf-8' } '.json' { 'application/json; charset=utf-8' } default { 'application/octet-stream' } }
     Write-Bytes $client ([IO.File]::ReadAllBytes($resolvedFile)) $type
   } else {
     Write-Text $client 'Not found' 'text/plain; charset=utf-8' '404 Not Found'

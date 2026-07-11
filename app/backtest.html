@@ -63,38 +63,24 @@
   </main>
   <script src="../data/chart-data.js"></script>
   <script src="../data/backtest-predictions.js"></script>
+  <script src="./core/ssq-core.js"></script>
   <script>
     (() => {
-      const STORAGE_KEY = "ssq-analysis-portable-record";
+      const { compactIssueKey, normalizePick, normalizePicks, readRecord } = window.SSQCore;
       const rows = window.SSQ_CHART_DATA?.rows || [];
       const labels = { 1: "自选", 2: "机选1", 3: "机选2" };
       const predictionPanel = document.getElementById("predictionPanel");
       const resultPanel = document.getElementById("resultPanel");
-      const uniqueSorted = (items, max) => [...new Set((items || []).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= max))].sort((a, b) => a - b);
-      const normalizePick = (pick) => ({ red: uniqueSorted(pick?.red || [], 33).slice(0, 6), blue: uniqueSorted(pick?.blue || [], 16).slice(0, 1) });
-      const compactIssueKey = (issue) => {
-        const digits = String(issue || "").replace(/\D/g, "");
-        return digits.length > 5 && digits.startsWith("20") ? digits.slice(-5) : digits;
-      };
       const ball = (n, color) => `<span class="ball ${color}">${String(n).padStart(2, "0")}</span>`;
       const formatPick = (pick) => {
         const { red, blue } = normalizePick(pick);
         if (!red.length && !blue.length) return '<span class="empty">未输入</span>';
         return `<span class="pick">${red.map((n) => ball(n, "red")).join("")}${blue.map((n) => ball(n, "blue")).join("")}</span>`;
       };
-      const readPayload = () => {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); }
-        catch { return {}; }
-      };
       const normalizeBacktestRecord = (record) => ({ ...normalizePick(record), source: record?.source || "历史预测" });
       const readPicks = (payload) => {
-        const picks = { 1: { red: [], blue: [] }, 2: { red: [], blue: [] }, 3: { red: [], blue: [] }, ...(payload.picks || {}) };
-        for (let line = 1; line <= 3; line += 1) {
-          picks[line] = normalizePick(picks[line]);
-        }
-        return picks;
+        return normalizePicks(payload.picks);
       };
-      const activePredictions = (picks) => [1, 2, 3].map((line) => ({ line, label: labels[line], ...picks[line] })).filter((item) => item.red.length || item.blue.length);
       const historicalPredictions = (payload) => {
         const merged = { ...(window.SSQ_BACKTEST_PREDICTIONS || {}), ...(payload.savedBacktestPredictions || {}) };
         return Object.fromEntries(Object.entries(merged).map(([issue, record]) => [compactIssueKey(issue), normalizeBacktestRecord(record)]).filter(([, record]) => record.red.length || record.blue.length));
@@ -106,9 +92,9 @@
         const blueHits = prediction.blue.filter((n) => n === blue);
         return { ...prediction, redHits, blueHits, totalHits: redHits.length + blueHits.length };
       };
-      const buildResults = (currentPredictions, historyMap) => rows.map((row) => {
+      const buildResults = (historyMap) => rows.map((row) => {
         const history = historyMap[compactIssueKey(row.issue)];
-        const predictions = history ? [...currentPredictions, { label: history.source, ...history }] : currentPredictions;
+        const predictions = history ? [{ label: history.source, ...history }] : [];
         const evaluations = predictions.map((prediction) => evaluate(prediction, row));
         return {
           issue: row.issue,
@@ -138,16 +124,15 @@
       const renderSummary = (summary) => `<div class="summary"><div class="metric"><b>回测期数</b>${summary.issues}</div><div class="metric"><b>红球平均命中率</b><span class="metric-line"><span>${summary.redRate}</span><span class="metric-extra">平均${summary.redAvgHits}中</span></span></div><div class="metric"><b>蓝球平均命中率</b><span class="metric-line"><span>${summary.blueRate}</span><span class="metric-extra">平均${summary.blueAvgHits}中</span></span></div><div class="metric"><b>平均命中 / 高光期</b>${summary.avgHits} / ${summary.strong}</div></div>`;
       const renderIssue = (item) => `<div class="issue"><div class="line"><b>${item.issue}期</b><span>平均 ${item.avgHits} 中，最佳 ${item.bestHits} 中</span></div>${item.evaluations.map((evaluation) => `<div class="line"><span>${evaluation.label}</span>${formatPick(evaluation)}<span>${evaluation.totalHits}中（红${evaluation.redHits.length} 蓝${evaluation.blueHits.length}）</span></div>`).join("")}<div class="line"><span>开奖号</span>${formatPick(item.actual)}</div></div>`;
       const run = () => {
-        const payload = readPayload();
+        const payload = readRecord();
         const picks = readPicks(payload);
-        const predictions = activePredictions(picks);
         const historyMap = historicalPredictions(payload);
         predictionPanel.innerHTML = `<h2>当前预测号</h2>${[1, 2, 3].map((line) => `<div class="line"><b>${labels[line]}</b>${formatPick(picks[line])}</div>`).join("")}`;
-        if (!predictions.length && !Object.keys(historyMap).length) {
-          resultPanel.innerHTML = '<h2>回测结果</h2><div class="empty">请先在预测区或策略库保存预测号。</div>';
+        if (!Object.keys(historyMap).length) {
+          resultPanel.innerHTML = '<h2>回测结果</h2><div class="empty">暂无按期号保存的历史预测。当前预测号不会套用到过去期次，以避免回看偏差。</div>';
           return;
         }
-        const results = buildResults(predictions, historyMap);
+        const results = buildResults(historyMap);
         const count = Math.min(Math.max(Number(document.getElementById("issueCount").value) || 20, 1), results.length);
         const selected = results.slice(-count);
         resultPanel.innerHTML = `<h2>回测结果</h2><details open><summary><span>最近 ${count} 期</span><span>${selected.at(-1)?.issue || ""}</span></summary><div class="body">${renderSummary(summarize(selected))}<div class="issue-list">${selected.map(renderIssue).join("")}</div></div></details><details><summary><span>全部数据</span><span>${results.length} 期</span></summary><div class="body">${renderSummary(summarize(results))}<div class="issue-list">${results.map(renderIssue).join("")}</div></div></details>`;
@@ -158,5 +143,3 @@
   </script>
 </body>
 </html>
-
-

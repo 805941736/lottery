@@ -1,0 +1,20 @@
+#!/bin/zsh
+set -u
+
+SCRIPT_DIR="${0:A:h}"
+ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+PORT="8765"
+LAUNCH_PATH="$ROOT/app/launch.html"
+SERVER_SCRIPT="$ROOT/scripts/ssq-local-server.py"
+LOG_PATH="$ROOT/data/ssq-local-server.log"
+
+mkdir -p "$ROOT/data"
+
+if ! command -v python3 >/dev/null 2>&1; then
+  osascript -e 'display dialog "未找到 python3，无法启动双色球分析本地服务。请先安装 Python 3，或联系维护者。" buttons {"好"} default button "好" with icon caution'
+  exit 1
+fi
+
+nohup python3 "$SERVER_SCRIPT" --port "$PORT" >>"$LOG_PATH" 2>&1 &
+open "$LAUNCH_PATH"
+exit 0

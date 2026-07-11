@@ -91,56 +91,35 @@
     </section>
   </main>
   <script src="../data/chart-data.js"></script>
+  <script src="./core/ssq-core.js"></script>
   <script>
     (() => {
-      const STORAGE_KEY = "ssq-analysis-portable-record";
-      const STORAGE_SCHEMA_VERSION = 10;
+      const { createPicks, formatPickInput, normalizePicks, parsePickInput, readRecord: loadRecord, uniqueSorted, writeRecord } = window.SSQCore;
       const labels = { 1: "自选", 2: "机选1", 3: "机选2" };
       const rows = window.SSQ_CHART_DATA?.rows || [];
-      let picks = { 1: { red: [], blue: [] }, 2: { red: [], blue: [] }, 3: { red: [], blue: [] } };
+      let picks = createPicks();
       const pickLines = document.getElementById("pickLines");
       const metrics = document.getElementById("metrics");
       const statusText = document.getElementById("statusText");
-      const uniqueSorted = (items, max) => [...new Set((items || []).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= max))].sort((a, b) => a - b);
       const ball = (n, color) => `<span class="ball ${color}">${String(n).padStart(2, "0")}</span>`;
       const setStatus = (text) => { statusText.textContent = text; };
-      const normalize = () => {
-        for (let line = 1; line <= 3; line += 1) {
-          picks[line] = picks[line] || { red: [], blue: [] };
-          picks[line].red = uniqueSorted(picks[line].red, 33).slice(0, 6);
-          picks[line].blue = uniqueSorted(picks[line].blue, 16).slice(0, 1);
-        }
-      };
-      const readPayload = () => {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); }
-        catch { return {}; }
-      };
       const readRecord = () => {
-        const payload = readPayload();
-        if (payload.picks) picks = { ...picks, ...payload.picks };
-        normalize();
+        const payload = loadRecord();
+        if (payload.picks) picks = normalizePicks(payload.picks);
       };
       const saveRecord = () => {
-        normalize();
-        const previous = readPayload();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...previous, version: STORAGE_SCHEMA_VERSION, savedAt: new Date().toISOString(), picks }));
+        picks = normalizePicks(picks);
+        writeRecord({ picks });
         setStatus("已保存，分析页和回测区会读取同一份预测号。");
       };
-      const parseInput = (value) => {
-        const raw = String(value || "").trim();
-        const digits = raw.replace(/\D/g, "");
-        const numbers = raw && /^\d{14}$/.test(digits) ? digits.match(/\d{2}/g).map(Number) : (raw.match(/\d{1,2}/g) || []).map(Number);
-        return { red: uniqueSorted(numbers.slice(0, 6), 33), blue: uniqueSorted(numbers.slice(6, 7), 16) };
-      };
-      const inputValue = (pick) => [...uniqueSorted(pick.red, 33), ...uniqueSorted(pick.blue, 16)].map((n) => String(n).padStart(2, "0")).join(" ");
       const renderPick = (pick) => {
         const red = uniqueSorted(pick.red, 33);
         const blue = uniqueSorted(pick.blue, 16);
         return red.map((n) => ball(n, "red")).join("") + blue.map((n) => ball(n, "blue")).join("");
       };
       const render = () => {
-        normalize();
-        pickLines.innerHTML = [1, 2, 3].map((line) => `<div class="pick-line"><strong>${labels[line]}</strong><div><input class="number-input" data-line="${line}" value="${inputValue(picks[line])}" placeholder="01 05 12 18 23 31 08"><div class="preview">${renderPick(picks[line])}</div></div></div>`).join("");
+        picks = normalizePicks(picks);
+        pickLines.innerHTML = [1, 2, 3].map((line) => `<div class="pick-line"><strong>${labels[line]}</strong><div><input class="number-input" data-line="${line}" value="${formatPickInput(picks[line])}" placeholder="01 05 12 18 23 31 08"><div class="preview">${renderPick(picks[line])}</div></div></div>`).join("");
       };
       const numberStats = (max, key) => {
         const count = Array(max + 1).fill(0);
@@ -184,11 +163,11 @@
       pickLines.addEventListener("input", (event) => {
         const input = event.target.closest("[data-line]");
         if (!input) return;
-        picks[Number(input.dataset.line)] = parseInput(input.value);
+        picks[Number(input.dataset.line)] = parsePickInput(input.value);
         input.parentElement.querySelector(".preview").innerHTML = renderPick(picks[Number(input.dataset.line)]);
       });
       document.getElementById("saveButton").addEventListener("click", saveRecord);
-      document.getElementById("clearButton").addEventListener("click", () => { picks = { 1: { red: [], blue: [] }, 2: { red: [], blue: [] }, 3: { red: [], blue: [] } }; render(); saveRecord(); });
+      document.getElementById("clearButton").addEventListener("click", () => { picks = createPicks(); render(); saveRecord(); });
       const latest = rows.at(-1);
       metrics.innerHTML = [
         ["本地数据", `${rows.length} 期`],
@@ -202,5 +181,3 @@
   </script>
 </body>
 </html>
-
-

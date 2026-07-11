@@ -3,34 +3,55 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>正在打开双色球分析</title>
+  <title>正在启动双色球分析</title>
   <style>
     html, body { height: 100%; margin: 0; font-family: "Microsoft YaHei", Arial, sans-serif; background: #f5f7fb; color: #1f2937; }
     body { display: grid; place-items: center; }
     .box { padding: 22px 26px; border: 1px solid #d7dce3; border-radius: 10px; background: #fff; box-shadow: 0 12px 30px rgba(31,41,55,.12); }
     .title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
     .text { color: #6b7280; font-size: 14px; }
+    .retry { display: none; margin-top: 14px; min-height: 32px; padding: 0 10px; border: 1px solid #b8cdfb; border-radius: 7px; color: #155eef; background: #edf4ff; font: inherit; cursor: pointer; }
+    .box.failed .text { color: #b42318; }
+    .box.failed .retry { display: inline-flex; align-items: center; }
   </style>
 </head>
 <body>
-  <div class="box">
-    <div class="title">正在打开双色球分析标注</div>
-    <div class="text">本地服务启动后会自动进入图表页面。</div>
+  <div class="box" id="launchBox">
+    <div class="title">正在启动双色球分析标注</div>
+    <div class="text" id="launchText">本地服务启动后会自动进入图表页面。</div>
+    <button class="retry" id="retryButton" type="button">重新检测</button>
   </div>
   <script>
     const target = "http://127.0.0.1:8765/";
+    const launchBox = document.getElementById("launchBox");
+    const launchText = document.getElementById("launchText");
+    const retryButton = document.getElementById("retryButton");
     let attempts = 0;
+    let retryTimer = 0;
+    const fail = () => {
+      clearTimeout(retryTimer);
+      launchBox.classList.add("failed");
+      launchText.textContent = "未检测到双色球本地服务。端口 8765 可能被其他程序占用；请关闭占用程序后重新双击启动入口。";
+    };
     const probe = () => {
       attempts += 1;
+      window.__SSQ_READY__ = false;
       const script = document.createElement("script");
       script.src = `${target}launch-ready.js?t=${Date.now()}`;
-      script.onload = () => location.replace(target);
+      script.onload = () => {
+        script.remove();
+        if (window.__SSQ_READY__) location.replace(target);
+        else if (attempts >= 100) fail();
+        else retryTimer = setTimeout(probe, 200);
+      };
       script.onerror = () => {
         script.remove();
-        setTimeout(probe, attempts < 80 ? 120 : 600);
+        if (attempts >= 100) fail();
+        else retryTimer = setTimeout(probe, attempts < 80 ? 120 : 300);
       };
       document.head.appendChild(script);
     };
+    retryButton.addEventListener("click", () => { attempts = 0; launchBox.classList.remove("failed"); launchText.textContent = "正在重新检测本地服务…"; probe(); });
     probe();
   </script>
 </body>
