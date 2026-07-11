@@ -1,6 +1,7 @@
 (() => {
   const normalizeBounds = (bounds) => ({ x: Math.min(bounds.x, bounds.x + bounds.w), y: Math.min(bounds.y, bounds.y + bounds.h), w: Math.abs(bounds.w), h: Math.abs(bounds.h) });
   const pointsBounds = (points) => {
+    if (!Array.isArray(points) || points.length === 0) return null;
     const xs = points.map((point) => point.x);
     const ys = points.map((point) => point.y);
     return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
@@ -18,5 +19,7 @@
     if (handle.includes("e")) next.w = point.x - bounds.x;
     return normalizeBounds(next);
   };
-  window.SSQAnnotationGeometry = Object.freeze({ normalizeBounds, pointsBounds, scalePoint, pointInBounds, boundsFromHandle });
+  const api = Object.freeze({ normalizeBounds, pointsBounds, scalePoint, pointInBounds, boundsFromHandle });
+  if (typeof window !== "undefined") window.SSQAnnotationGeometry = api;
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();

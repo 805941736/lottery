@@ -81,7 +81,6 @@
       const readPicks = (payload) => {
         return normalizePicks(payload.picks);
       };
-      const activePredictions = (picks) => [1, 2, 3].map((line) => ({ line, label: labels[line], ...picks[line] })).filter((item) => item.red.length || item.blue.length);
       const historicalPredictions = (payload) => {
         const merged = { ...(window.SSQ_BACKTEST_PREDICTIONS || {}), ...(payload.savedBacktestPredictions || {}) };
         return Object.fromEntries(Object.entries(merged).map(([issue, record]) => [compactIssueKey(issue), normalizeBacktestRecord(record)]).filter(([, record]) => record.red.length || record.blue.length));
@@ -93,9 +92,9 @@
         const blueHits = prediction.blue.filter((n) => n === blue);
         return { ...prediction, redHits, blueHits, totalHits: redHits.length + blueHits.length };
       };
-      const buildResults = (currentPredictions, historyMap) => rows.map((row) => {
+      const buildResults = (historyMap) => rows.map((row) => {
         const history = historyMap[compactIssueKey(row.issue)];
-        const predictions = history ? [...currentPredictions, { label: history.source, ...history }] : currentPredictions;
+        const predictions = history ? [{ label: history.source, ...history }] : [];
         const evaluations = predictions.map((prediction) => evaluate(prediction, row));
         return {
           issue: row.issue,
@@ -127,14 +126,13 @@
       const run = () => {
         const payload = readRecord();
         const picks = readPicks(payload);
-        const predictions = activePredictions(picks);
         const historyMap = historicalPredictions(payload);
         predictionPanel.innerHTML = `<h2>当前预测号</h2>${[1, 2, 3].map((line) => `<div class="line"><b>${labels[line]}</b>${formatPick(picks[line])}</div>`).join("")}`;
-        if (!predictions.length && !Object.keys(historyMap).length) {
-          resultPanel.innerHTML = '<h2>回测结果</h2><div class="empty">请先在预测区或策略库保存预测号。</div>';
+        if (!Object.keys(historyMap).length) {
+          resultPanel.innerHTML = '<h2>回测结果</h2><div class="empty">暂无按期号保存的历史预测。当前预测号不会套用到过去期次，以避免回看偏差。</div>';
           return;
         }
-        const results = buildResults(predictions, historyMap);
+        const results = buildResults(historyMap);
         const count = Math.min(Math.max(Number(document.getElementById("issueCount").value) || 20, 1), results.length);
         const selected = results.slice(-count);
         resultPanel.innerHTML = `<h2>回测结果</h2><details open><summary><span>最近 ${count} 期</span><span>${selected.at(-1)?.issue || ""}</span></summary><div class="body">${renderSummary(summarize(selected))}<div class="issue-list">${selected.map(renderIssue).join("")}</div></div></details><details><summary><span>全部数据</span><span>${results.length} 期</span></summary><div class="body">${renderSummary(summarize(results))}<div class="issue-list">${results.map(renderIssue).join("")}</div></div></details>`;
@@ -145,4 +143,3 @@
   </script>
 </body>
 </html>
-

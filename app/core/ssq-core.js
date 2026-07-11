@@ -38,7 +38,7 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     return next;
   };
-  window.SSQCore = Object.freeze({
+  const api = Object.freeze({
     STORAGE_KEY,
     STORAGE_SCHEMA_VERSION,
     PICK_LINES,
@@ -54,4 +54,6 @@
     readRecord,
     writeRecord
   });
+  if (typeof window !== "undefined") window.SSQCore = api;
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();

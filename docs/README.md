@@ -1,6 +1,6 @@
 # 双色球分析标注
 
-当前确认版本：正式版 2.1。
+当前确认版本：正式版 3.0。
 
 正式版入口只有两个：
 
@@ -13,6 +13,9 @@
 
 - `../app/`：页面入口与标注、预测、策略、回测界面。
 - `../app/core/`：跨页面共享的存储、号码处理与标注几何模块。
+- `../app/domain/`：走势、预测、策略和回测的可测试纯逻辑。
+- `../app/features/`：功能视图、Canvas 标注渲染与交互适配。
+- `../app/services/`：记录仓储和撤销历史。
 - `../data/`：本地开奖数据快照与历史回测预测数据。
 - `../scripts/`：本地服务与数据刷新脚本。
 - `./`：项目说明文档。
@@ -43,3 +46,13 @@
 - 标注的边界、命中和缩放几何统一放在 `app/core/annotation-geometry.js`。
 - 页面只负责界面与业务编排；跨页面状态继续使用同一份记录 schema，修改 schema 时同步更新核心模块和版本号。
 - 新增浏览器资源需同时加入 Python 与 PowerShell 本地服务的公开路径白名单，避免 Windows 与 macOS 行为不一致。
+
+## 测试
+
+- 服务端：`python3 -m unittest discover -s tests -p 'test_*.py' -v`
+- 共享前端模块：`node tests/test-core.js`
+- ES 模块领域测试：`node tests/test-modules.mjs`
+
+详细的模块边界和依赖方向见 `ARCHITECTURE.md`。
+
+回测只使用与开奖期号一致的历史预测记录；当前预测号不得套用到过去期次。

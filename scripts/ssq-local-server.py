@@ -9,6 +9,7 @@ import re
 import shutil
 import socket
 import sys
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -24,10 +25,17 @@ SERVER_STATE_PATH = DATA_ROOT / "ssq-local-server.json"
 RECORD_BACKUP_ROOT = DATA_ROOT / "record-backups"
 MAX_RECORD_BYTES = 2 * 1024 * 1024
 PUBLIC_DATA_FILES = {"data/chart-data.js", "data/latest-ssq.js", "data/backtest-predictions.js"}
+PUBLIC_APP_PATTERN = re.compile(r"app/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_-][A-Za-z0-9._-]*\.(?:html|js|css)")
+RECORD_LOCK = threading.RLock()
+REFRESH_LOCK = threading.Lock()
 
 
 def now_text():
     return dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def is_public_file(request_path):
+    return request_path in PUBLIC_DATA_FILES or bool(PUBLIC_APP_PATTERN.fullmatch(request_path))
 
 
 def write_text_atomic(path, text):
@@ -268,10 +276,12 @@ class SSQHandler(BaseHTTPRequestHandler):
 
     def handle_records(self):
         if self.command == "GET":
-            if RECORD_PATH.is_file():
-                self.send_bytes(200, "application/json; charset=utf-8", RECORD_PATH.read_bytes())
-            else:
+            with RECORD_LOCK:
+                body = RECORD_PATH.read_bytes() if RECORD_PATH.is_file() else None
+            if body is None:
                 self.send_json(404, {"error": "record file not found"})
+            else:
+                self.send_bytes(200, "application/json; charset=utf-8", body)
             return
         if self.command == "POST":
             try:
@@ -294,26 +304,28 @@ class SSQHandler(BaseHTTPRequestHandler):
                 self.send_json(400, {"error": "invalid record", "message": str(error)})
                 return
             encoded = body.encode("utf-8")
-            if RECORD_PATH.is_file() and RECORD_PATH.read_bytes() == encoded:
-                self.send_json(200, {"ok": True, "unchanged": True})
-                return
-            backup_record_file()
-            write_text_atomic(RECORD_PATH, body)
+            with RECORD_LOCK:
+                if RECORD_PATH.is_file() and RECORD_PATH.read_bytes() == encoded:
+                    self.send_json(200, {"ok": True, "unchanged": True})
+                    return
+                backup_record_file()
+                write_text_atomic(RECORD_PATH, body)
             self.send_json(200, {"ok": True})
             return
         self.send_json(405, {"error": "method not allowed"})
 
     def handle_refresh(self):
         try:
-            payload = merge_with_local_history(get_500_payload())
-            assert_lottery_payload(payload)
-            save_data_files(payload)
+            with REFRESH_LOCK:
+                payload = merge_with_local_history(get_500_payload())
+                assert_lottery_payload(payload)
+                save_data_files(payload)
             self.send_json(200, payload)
         except Exception as error:
             self.send_json(502, {"error": "refresh failed", "message": str(error)})
 
     def handle_static(self, request_path):
-        if request_path not in PUBLIC_DATA_FILES and not re.fullmatch(r"app/(?:[A-Za-z0-9._-]+\.html|core/[A-Za-z0-9._-]+\.js)", request_path):
+        if not is_public_file(request_path):
             self.send_text(404, "text/plain; charset=utf-8", "Not found")
             return
         full_path = (PROJECT_ROOT / request_path).resolve()

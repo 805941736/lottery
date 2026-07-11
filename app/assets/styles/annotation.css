@@ -1,0 +1,6 @@
+.canvas-layer { position: absolute; inset: 0 auto auto 0; width: 1px; height: 1px; touch-action: none; cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M8 3v10M3 8h10' stroke='%23374151' stroke-width='1'/%3E%3C/svg%3E") 8 8, crosshair; z-index: 4; }
+.canvas-layer.hand-mode { cursor: default; }
+.canvas-layer.select-mode { cursor: default; }
+.canvas-layer.hidden-layer { opacity: 0; pointer-events: none; }
+.text-box { position: absolute; z-index: 6; width: calc(1em + 4px); min-width: 22px; max-width: min(460px, calc(100vw - 32px)); height: 22px; min-height: 22px; max-height: 260px; margin: 0; padding: 0; border: 0; border-radius: 0; outline: none; appearance: none; -webkit-appearance: none; color: var(--text); background: transparent; box-shadow: none; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; line-height: 1.25; white-space: pre; word-break: normal; resize: none; overflow: hidden; }
+.text-box:focus { border: 0; background: transparent; box-shadow: none; }

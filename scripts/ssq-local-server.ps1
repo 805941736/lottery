@@ -246,14 +246,14 @@ function Handle-Request($client, $request) {
     }
     return
   }
-  $publicFile = $requestPath -match '^app/([A-Za-z0-9._-]+\.html|core/[A-Za-z0-9._-]+\.js)$' -or $requestPath -in @('data/chart-data.js', 'data/latest-ssq.js', 'data/backtest-predictions.js')
+  $publicFile = $requestPath -match '^app/([A-Za-z0-9_-]+/)*[A-Za-z0-9_-][A-Za-z0-9._-]*\.(html|js|css)$' -or $requestPath -in @('data/chart-data.js', 'data/latest-ssq.js', 'data/backtest-predictions.js')
   if (-not $publicFile) { Write-Text $client 'Not found' 'text/plain; charset=utf-8' '404 Not Found'; return }
   $fullPath = Join-Path $ProjectRoot $requestPath
   $resolvedRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
   $resolvedFile = if (Test-Path -LiteralPath $fullPath -PathType Leaf) { (Resolve-Path -LiteralPath $fullPath).Path } else { $null }
   if ($resolvedFile -and ($resolvedFile.Equals($resolvedRoot, [StringComparison]::OrdinalIgnoreCase) -or $resolvedFile.StartsWith($resolvedRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or $resolvedFile.StartsWith($resolvedRoot + [IO.Path]::AltDirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase))) {
     $ext = [IO.Path]::GetExtension($fullPath).ToLowerInvariant()
-    $type = switch ($ext) { '.html' { 'text/html; charset=utf-8' } '.js' { 'application/javascript; charset=utf-8' } '.json' { 'application/json; charset=utf-8' } default { 'application/octet-stream' } }
+    $type = switch ($ext) { '.html' { 'text/html; charset=utf-8' } '.js' { 'application/javascript; charset=utf-8' } '.css' { 'text/css; charset=utf-8' } '.json' { 'application/json; charset=utf-8' } default { 'application/octet-stream' } }
     Write-Bytes $client ([IO.File]::ReadAllBytes($resolvedFile)) $type
   } else {
     Write-Text $client 'Not found' 'text/plain; charset=utf-8' '404 Not Found'
