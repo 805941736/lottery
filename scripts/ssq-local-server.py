@@ -13,6 +13,7 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -73,6 +74,10 @@ def test_existing_server(port):
 def save_server_state(port):
     state = {"port": port, "startedAt": dt.datetime.now().astimezone().isoformat()}
     write_text_atomic(SERVER_STATE_PATH, json.dumps(state, ensure_ascii=False, separators=(",", ":")))
+
+
+def open_application(port):
+    webbrowser.open(f"http://127.0.0.1:{port}/")
 
 
 def assert_lottery_row(row):
@@ -346,10 +351,13 @@ class SSQHandler(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description="双色球分析标注本地服务")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--open", action="store_true", help="服务就绪后打开应用首页")
     args = parser.parse_args()
 
     os.chdir(PROJECT_ROOT)
     if test_existing_server(args.port):
+        if args.open:
+            open_application(args.port)
         return 0
 
     try:
@@ -358,6 +366,8 @@ def main():
         print(f"无法启动本地服务：端口 {args.port} 已被其他程序占用。请关闭占用程序后重试。({error})", file=sys.stderr)
         return 2
     save_server_state(server.server_port)
+    if args.open:
+        open_application(server.server_port)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

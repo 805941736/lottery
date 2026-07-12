@@ -4,30 +4,28 @@ set -u
 SCRIPT_DIR="${0:A:h}"
 ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 PORT="8765"
-LAUNCH_PATH="$ROOT/app/launch.html"
 SERVER_SCRIPT="$ROOT/scripts/ssq-local-server.py"
 LOG_PATH="$ROOT/data/ssq-local-server.log"
 
-mkdir -p "$ROOT/data"
-
-if ! command -v python3 >/dev/null 2>&1; then
+PYTHON_BIN="/usr/bin/python3"
+if [[ ! -x "$PYTHON_BIN" ]]; then
   osascript -e 'display dialog "未找到 python3，无法启动双色球分析本地服务。请先安装 Python 3，或联系维护者。" buttons {"好"} default button "好" with icon caution'
   exit 1
 fi
 
-python3 "$SERVER_SCRIPT" --port "$PORT" </dev/null >>"$LOG_PATH" 2>&1 &
-SERVER_PID=$!
+# Finder 启动的未签名应用无法直接访问可移动卷，交给 Terminal 获取系统授权并托管服务。
+if [[ "$ROOT" == /Volumes/* ]]; then
+  TERMINAL_COMMAND="cd -- ${(q)ROOT} && mkdir -p data && exec ${(q)PYTHON_BIN} ${(q)SERVER_SCRIPT} --port $PORT --open >>${(q)LOG_PATH} 2>&1"
+  /usr/bin/osascript \
+    -e 'on run argv' \
+    -e 'tell application "Terminal"' \
+    -e 'do script (item 1 of argv)' \
+    -e 'set miniaturized of front window to true' \
+    -e 'end tell' \
+    -e 'end run' \
+    "$TERMINAL_COMMAND"
+  exit $?
+fi
 
-for attempt in {1..40}; do
-  if /usr/bin/curl --silent --fail --max-time 1 "http://127.0.0.1:$PORT/launch-ready.js" >/dev/null 2>&1; then
-    open "http://127.0.0.1:$PORT/"
-    wait "$SERVER_PID"
-    exit $?
-  fi
-  sleep 0.1
-done
-
-open "$LAUNCH_PATH"
-osascript -e 'display dialog "本地服务未能启动。请检查 data/ssq-local-server.log，或联系维护者。" buttons {"好"} default button "好" with icon caution'
-kill "$SERVER_PID" >/dev/null 2>&1 || true
-exit 2
+mkdir -p "$ROOT/data"
+exec "$PYTHON_BIN" "$SERVER_SCRIPT" --port "$PORT" --open </dev/null >>"$LOG_PATH" 2>&1
