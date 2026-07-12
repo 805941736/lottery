@@ -13,14 +13,16 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
   exit 1
 fi
 
-# Finder 启动的未签名应用无法直接访问可移动卷，交给 Terminal 获取系统授权并托管服务。
+# Finder 启动的未签名应用无法直接访问可移动卷，短暂交给 Terminal 完成授权后转入后台。
 if [[ "$ROOT" == /Volumes/* ]]; then
-  TERMINAL_COMMAND="cd -- ${(q)ROOT} && mkdir -p data && exec ${(q)PYTHON_BIN} ${(q)SERVER_SCRIPT} --port $PORT --open >>${(q)LOG_PATH} 2>&1"
+  TERMINAL_COMMAND="cd -- ${(q)ROOT}; mkdir -p data; /usr/bin/nohup ${(q)PYTHON_BIN} ${(q)SERVER_SCRIPT} --port $PORT --open </dev/null >>${(q)LOG_PATH} 2>&1 & exit"
   /usr/bin/osascript \
     -e 'on run argv' \
     -e 'tell application "Terminal"' \
     -e 'do script (item 1 of argv)' \
-    -e 'set miniaturized of front window to true' \
+    -e 'set launchWindow to front window' \
+    -e 'delay 1' \
+    -e 'close launchWindow' \
     -e 'end tell' \
     -e 'end run' \
     "$TERMINAL_COMMAND"
