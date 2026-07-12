@@ -88,6 +88,11 @@ class EntrypointTests(unittest.TestCase):
         self.assertFalse(server.is_public_file("app/features/.secret.js"))
         self.assertFalse(server.is_public_file("scripts/ssq-local-server.py"))
 
+    def test_open_application_uses_bound_local_port(self):
+        with mock.patch.object(server.webbrowser, "open") as browser_open:
+            server.open_application(8765)
+        browser_open.assert_called_once_with("http://127.0.0.1:8765/")
+
 
 if __name__ == "__main__":
     unittest.main()
