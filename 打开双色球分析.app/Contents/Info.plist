@@ -8,10 +8,14 @@
   <string>launch</string>
   <key>CFBundleIdentifier</key>
   <string>local.ssq.analysis</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
   <key>CFBundleName</key>
   <string>双色球分析</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>3.0</string>
   <key>CFBundleVersion</key>
   <string>3.0</string>
   <key>LSMinimumSystemVersion</key>
