@@ -303,11 +303,11 @@ import { createBacktestView } from "./features/backtest/backtest-view.js";
   };
   const aiInputValue = () => pickInputValue(aiManualPick);
   const focusAiInlineInput = () => setTimeout(() => { const input = document.querySelector("[data-ai-inline-input]"); if (input) { input.focus(); input.select(); } }, 0);
-  const updateAiInlineInput = (input, silent = false) => {
+  const updateAiInlineInput = (input, silent = false, refreshModel = true) => {
     aiManualPick = parsePredictionInput(input.value);
     normalizeAiManualPick();
     scheduleSave();
-    refreshPredictionModel();
+    if (refreshModel) refreshPredictionModel();
     if (!silent) setStatus("AI\u53f7\u7801\u5df2\u66f4\u65b0");
   };
   const buildModelPick = () => {
@@ -344,7 +344,6 @@ import { createBacktestView } from "./features/backtest/backtest-view.js";
     const line = Number(input.dataset.predictionLine);
     if (!predictionLines[line]) return null;
     predictionLines[line] = parsePredictionInput(input.value ?? input.textContent);
-    predictionResult = null;
     scheduleSave();
     if (!silent) setStatus(`${PICK_LINE_LABELS[line]}已更新`);
     return predictionLines[line];
@@ -1150,7 +1149,8 @@ import { createBacktestView } from "./features/backtest/backtest-view.js";
     });
     predictionPanel.addEventListener("focusout", (event) => {
       const aiInput = event.target.closest("[data-ai-inline-input]");
-      if (aiInput) { updateAiInlineInput(aiInput); return; }
+      // focusout 发生在 click 之前；此时重绘模型区会替换掉正要接收 click 的按钮。
+      if (aiInput) { updateAiInlineInput(aiInput, false, false); return; }
       const editor = event.target.closest("[data-prediction-line]");
       if (editor) renderPredictionLineAsBalls(editor);
     });
